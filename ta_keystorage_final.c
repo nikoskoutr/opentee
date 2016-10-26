@@ -39,30 +39,29 @@ static TEE_Result RSA_Operation(TEE_OperationMode mode, uint32_t algorithm,
 
   switch (mode) {
   case TEE_MODE_ENCRYPT:
-    ret = TEE_AsymmetricEncrypt(rsa_operation, opParams, paramCount, in_data,
-                                in_data_len, out_data, out_data_len);
+    ret = TEE_AsymmetricEncrypt(rsa_operation, NULL, 0, in_data, in_data_len,
+                                out_data, out_data_len);
     if (ret != TEE_SUCCESS) {
       OT_LOG(LOG_ERR, "TEE_AsymmetricEncrypt failed: 0x%x", ret);
     }
     break;
   case TEE_MODE_DECRYPT:
-    ret = TEE_AsymmetricDecrypt(rsa_operation, opParams, paramCount, in_data,
-                                in_data_len, out_data, out_data_len);
+    ret = TEE_AsymmetricDecrypt(rsa_operation, NULL, 0, in_data, in_data_len,
+                                out_data, out_data_len);
     if (ret != TEE_SUCCESS) {
       OT_LOG(LOG_ERR, "TEE_AsymmetricDecrypt failed: 0x%x", ret);
     }
     break;
   case TEE_MODE_SIGN:
-    ret = TEE_AsymmetricSignDigest(rsa_operation, opParams, paramCount, in_data,
-                                   in_data_len, out_data, &out_data_len);
+    ret = TEE_AsymmetricSignDigest(rsa_operation, NULL, 0, in_data, in_data_len,
+                                   out_data, &out_data_len);
     if (ret != TEE_SUCCESS) {
       OT_LOG(LOG_ERR, "TEE_AsymmetricSignDigest failed: 0x%x", ret);
     }
     break;
   case TEE_MODE_VERIFY:
-    ret =
-        TEE_AsymmetricVerifyDigest(rsa_operation, opParams, paramCount, in_data,
-                                   in_data_len, out_data, out_data_len);
+    ret = TEE_AsymmetricVerifyDigest(rsa_operation, NULL, 0, in_data,
+                                     in_data_len, out_data, out_data_len);
     if (ret != TEE_SUCCESS) {
       OT_LOG(LOG_ERR, "TEE_AsymmetricVerifyDigest failed: 0x%x", ret);
     }
