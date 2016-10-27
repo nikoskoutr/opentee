@@ -17,8 +17,7 @@ typedef enum {
 typedef enum { RSA = 0, AES = 1 } Algorithm_type;
 
 static TEE_Result RSA_Operation(TEE_OperationMode mode, uint32_t algorithm,
-                                TEE_ObjectHandle key, TEE_Attribute opParams,
-                                uint32_t paramCount, void *in_data,
+                                TEE_ObjectHandle key, void *in_data,
                                 uint32_t in_data_len, void *out_data,
                                 uint32_t out_data_len) {
   TEE_OperationHandle rsa_operation = NULL;
@@ -40,30 +39,29 @@ static TEE_Result RSA_Operation(TEE_OperationMode mode, uint32_t algorithm,
 
   switch (mode) {
   case TEE_MODE_ENCRYPT:
-    ret = TEE_AsymmetricEncrypt(rsa_operation, opParams, paramCount, in_data,
-                                in_data_len, out_data, out_data_len);
+    ret = TEE_AsymmetricEncrypt(rsa_operation, NULL, 0, in_data, in_data_len,
+                                out_data, out_data_len);
     if (ret != TEE_SUCCESS) {
       OT_LOG(LOG_ERR, "TEE_AsymmetricEncrypt failed: 0x%x", ret);
     }
     break;
   case TEE_MODE_DECRYPT:
-    ret = TEE_AsymmetricDecrypt(rsa_operation, opParams, paramCount, in_data,
-                                in_data_len, out_data, out_data_len);
+    ret = TEE_AsymmetricDecrypt(rsa_operation, NULL, 0, in_data, in_data_len,
+                                out_data, out_data_len);
     if (ret != TEE_SUCCESS) {
       OT_LOG(LOG_ERR, "TEE_AsymmetricDecrypt failed: 0x%x", ret);
     }
     break;
   case TEE_MODE_SIGN:
-    ret = TEE_AsymmetricSignDigest(rsa_operation, opParams, paramCount, in_data,
-                                   in_data_len, out_data, &out_data_len);
+    ret = TEE_AsymmetricSignDigest(rsa_operation, NULL, 0, in_data, in_data_len,
+                                   out_data, &out_data_len);
     if (ret != TEE_SUCCESS) {
       OT_LOG(LOG_ERR, "TEE_AsymmetricSignDigest failed: 0x%x", ret);
     }
     break;
   case TEE_MODE_VERIFY:
-    ret =
-        TEE_AsymmetricVerifyDigest(rsa_operation, opParams, paramCount, in_data,
-                                   in_data_len, out_data, out_data_len);
+    ret = TEE_AsymmetricVerifyDigest(rsa_operation, NULL, 0, in_data,
+                                     in_data_len, out_data, out_data_len);
     if (ret != TEE_SUCCESS) {
       OT_LOG(LOG_ERR, "TEE_AsymmetricVerifyDigest failed: 0x%x", ret);
     }
@@ -77,8 +75,7 @@ static TEE_Result RSA_Operation(TEE_OperationMode mode, uint32_t algorithm,
 }
 
 static TEE_Result AES_operation(TEE_OperationMode mode, uint32_t algorithm,
-                                TEE_ObjectHandle key, TEE_Attribute opParams,
-                                void *IV, uint32_t IV_len, uint32_t paramCount,
+                                TEE_ObjectHandle key, void *IV, uint32_t IV_len,
                                 void *in_data, uint32_t in_data_len,
                                 void *out_data, uint32_t *out_data_len) {
   TEE_OperationHandle aes_operation = NULL;
@@ -109,13 +106,13 @@ static TEE_Result AES_operation(TEE_OperationMode mode, uint32_t algorithm,
   return ret;
 }
 
-static TEE_Result digest_operation(TEE_OperationMode mode, uint32_t algorithm,
-                                   void *in_data, uint32_t in_data_len,
-                                   void *out_data, uint32_t *out_data_len) {
+static TEE_Result digest_operation(uint32_t algorithm, void *in_data,
+                                   uint32_t in_data_len, void *out_data,
+                                   uint32_t *out_data_len) {
   TEE_OperationHandle dig_operation = NULL;
   TEE_Result = TEE_SUCCESS;
 
-  ret = TEE_AllocateOperation(&dig_operation, algorithm, mode, 0);
+  ret = TEE_AllocateOperation(&dig_operation, algorithm, TEE_MODE_DIGEST, 0);
   if (ret != TEE_SUCCESS) {
     OT_LOG(LOG_ERR, "TEE_AllocateOperation failed: 0x%x", ret);
     TEE_FreeOperation(dig_operation);
@@ -259,15 +256,15 @@ static TEE_Result do_crypto(Operation op, Algorithm_type alg_type,
   TEE_Result = TEE_SUCCESS;
   switch (alg_type) {
   case RSA:
-    ret = RSA_Operation(mode, algorithm, key, NULL, 0, in_data, in_data_len,
-                        out_data, *out_data_len);
+    ret = RSA_Operation(mode, algorithm, key, in_data, in_data_len, out_data,
+                        *out_data_len);
     if (ret != TEE_SUCCESS) {
       OT_LOG(LOG_ERR, "RSA_Operation failed: 0x%x", ret);
     }
     return ret;
   case AES:
-    ret = AES_operation(mode, algorithm, key, NULL, IV, IV_len, 0, in_data,
-                        in_data_len, out_data, out_data_len);
+    ret = AES_operation(mode, algorithm, key, IV, IV_len, in_data, in_data_len,
+                        out_data, out_data_len);
     if (ret != TEE_SUCCESS) {
       OT_LOG(LOG_ERR, "AES_operation failed: 0x%x", ret);
     }
@@ -275,9 +272,45 @@ static TEE_Result do_crypto(Operation op, Algorithm_type alg_type,
   }
 }
 
-static TEE_Result do_digest() { TEE_Result ret = TEE_SUCCESS; }
+static TEE_Result do_sign(Operation op, uint32_t hash_algorithm,
+                          uint32_t sign_algorithm, TEE_ObjectHandle key,
+                          void *in_data, uint32_t in_data_len, void *out_data,
+                          uint32_t *out_data_len) {
+  TEE_Result ret = TEE_SUCCESS;
+  if (op != SIGN || op != VERIFY) {
+    OT_LOG(LOG_ERR, "Bad sign/verify operation.");
+    return TEE_ERROR_BAD_PARAMETERS;
+  } else if (op == SIGN) {
+    ret = digest_operation(hash_algorithm, in_data, in_data_len, out_data,
+                           out_data_len);
+    if (ret != TEE_SUCCESS) {
+      OT_LOG(LOG_ERR, "Error at digest_operation: 0x%x", ret);
+      return ret;
+    }
 
-static TEE_Result do_sign() { TEE_Result ret = TEE_SUCCESS; }
+    ret = RSA_Operation(TEE_MODE_SIGN, algorithm, key, out_data, *out_data_len,
+                        out_data, *out_data_len);
+    if (ret != TEE_SUCCESS) {
+      OT_LOG(LOG_ERR, "Error at RSA_Operation: 0x%x", ret);
+      return ret;
+    }
+  } else if (op == VERIFY) {
+    ret = digest_operation(hash_algorithm, out_data, *out_data_len, out_data,
+                           out_data_len);
+    if (ret != TEE_SUCCESS) {
+      OT_LOG(LOG_ERR, "Error at digest_operation: 0x%x", ret);
+      return ret;
+    }
+
+    ret = RSA_Operation(TEE_MODE_VERIFY, algorithm, key, out_data,
+                        *out_data_len, in_data, in_data_len);
+    if (ret != TEE_SUCCESS) {
+      OT_LOG(LOG_ERR, "Error at RSA_Operation: 0x%x", ret);
+      return ret;
+    }
+  }
+  return ret;
+}
 /*
 *
 * Should the secret keys be encrypted?
