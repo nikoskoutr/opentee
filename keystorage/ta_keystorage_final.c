@@ -7,6 +7,14 @@
 #define MAX_AES_KEYSIZE 256
 
 typedef enum {
+  ENCRYPTION = 0,
+  DECRYPTION = 1,
+  SIGNATURE = 2,
+  VERIFICATION = 3,
+  HASH = 4
+}
+
+typedef enum {
   DECRYPT = 0,
   ENCRYPT = 1,
   SIGN = 2,
@@ -15,6 +23,8 @@ typedef enum {
 } Operation;
 
 typedef enum { RSA = 0, AES = 1 } Algorithm_type;
+
+#define ALG_CHECK
 
 static TEE_Result RSA_Operation(TEE_OperationMode mode, uint32_t algorithm,
                                 TEE_ObjectHandle key, void *in_data,
@@ -311,6 +321,96 @@ static TEE_Result do_sign(Operation op, uint32_t hash_algorithm,
   }
   return ret;
 }
+
+TEE_Result TA_EXPORT TA_CreateEntryPoint(void) {
+  OT_LOG(LOG_ERR, "Calling the create entry point");
+
+  return TEE_SUCCESS;
+}
+
+void TA_EXPORT TA_DestroyEntryPoint(void) {
+  OT_LOG(LOG_ERR, "Calling the Destroy entry point");
+}
+
+TEE_Result TA_EXPORT TA_OpenSessionEntryPoint(uint32_t paramTypes,
+                                              TEE_Param params[4],
+                                              void **sessionContext) {
+  // paramTypes = paramTypes;
+  // sessionContext = sessionContext;
+  // params = params;
+  OT_LOG(LOG_ERR, "Calling the Open session entry point");
+  return TEE_SUCCESS;
+}
+
+void TA_EXPORT TA_CloseSessionEntryPoint(void *sessionContext) {
+  // sessionContext = sessionContext;
+  OT_LOG(LOG_DEBUG, "Calling the Close session entry point");
+}
+
+TEE_Result TA_EXPORT TA_InvokeCommandEntryPoint(void *sessionContext,
+                                                uint32_t commandID,
+                                                uint32_t paramTypes,
+                                                TEE_Param params[4]) {
+  // Parameter Check
+  if (TEE_PARAM_TYPE_GET(paramTypes, 0) != TEE_PARAM_TYPE_VALUE_INOUT ||
+      TEE_PARAM_TYPE_GET(paramTypes, 1) != TEE_PARAM_TYPE_VALUE_INOUT) {
+    OT_LOG(LOG_ERR, "Error bad parameters, params[0] and params[1] must be: "
+                    "TEE_PARAM_TYPE_VALUE_INOUT");
+    return TEE_ERROR_BAD_PARAMETERS;
+  }
+
+  if (TEE_PARAM_TYPE_GET(paramTypes, 0) != TEE_PARAM_TYPE_MEMREF_INOUT ||
+      TEE_PARAM_TYPE_GET(paramTypes, 1) != TEE_PARAM_TYPE_MEMREF_INOUT) {
+    OT_LOG(LOG_ERR, "Error bad parameters, params[2] and params[3] must be: "
+                    "TEE_PARAM_TYPE_MEMREF_INOUT");
+    return TEE_ERROR_BAD_PARAMETERS;
+  }
+
+  TEE_Result ret = TEE_SUCCESS;
+
+  switch (commandID) {
+  case ENCRYPTION:
+    ret = do_crypto(ENCRYPT, parms[0].value.a, ) break;
+  case DECRYPTION:
+    break;
+  case SIGNATURE:
+    break;
+  case VERIFICATION:
+    break;
+  case HASH:
+    break;
+  }
+}
+
+/*
+** SUPPORTED ALGORITHMS **
+** AES CRYPTO **
+*** TEE_ALG_AES_ECB_NOPAD
+*** TEE_ALG_AES_CBC_NOPAD
+*** TEE_ALG_AES_CTR
+*
+** RSA CRYPTO **
+*** TEE_ALG_RSA_NOPAD
+*** TEE_ALG_RSAES_PKCS1_V1_5
+*** TEE_ALG_RSAES_PKCS1_OAEP_MGF1_SHA512
+*** TEE_ALG_RSAES_PKCS1_OAEP_MGF1_SHA256
+*** TEE_ALG_RSAES_PKCS1_OAEP_MGF1_SHA1
+*
+** RSA SIGN **
+*** TEE_ALG_RSASSA_PKCS1_V1_5_MD5
+*** TEE_ALG_RSASSA_PKCS1_V1_5_SHA1
+*** TEE_ALG_RSASSA_PKCS1_V1_5_SHA256
+*** TEE_ALG_RSASSA_PKCS1_V1_5_SHA512
+*** TEE_ALG_RSASSA_PKCS1_PSS_MGF1_SHA1
+*** TEE_ALG_RSASSA_PKCS1_PSS_MGF1_SHA256
+*** TEE_ALG_RSASSA_PKCS1_PSS_MGF1_SHA512
+*
+** HASH **
+*** TEE_ALG_MD5
+*** TEE_ALG_SHA1
+*** TEE_ALG_SHA256
+*** TEE_ALG_SHA512
+*/
 /*
 *
 * Should the secret keys be encrypted?
