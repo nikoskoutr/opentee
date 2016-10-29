@@ -1,3 +1,33 @@
+/*****************************************
+** SUPPORTED ALGORITHMS ******************
+** AES CRYPTO ****************************
+*** TEE_ALG_AES_ECB_NOPAD ****************
+*** TEE_ALG_AES_CBC_NOPAD ****************
+*** TEE_ALG_AES_CTR **********************
+******************************************
+** RSA CRYPTO ****************************
+*** TEE_ALG_RSA_NOPAD ********************
+*** TEE_ALG_RSAES_PKCS1_V1_5 *************
+*** TEE_ALG_RSAES_PKCS1_OAEP_MGF1_SHA512 *
+*** TEE_ALG_RSAES_PKCS1_OAEP_MGF1_SHA256 *
+*** TEE_ALG_RSAES_PKCS1_OAEP_MGF1_SHA1 ***
+******************************************
+** RSA SIGN ******************************
+*** TEE_ALG_RSASSA_PKCS1_V1_5_MD5 ********
+*** TEE_ALG_RSASSA_PKCS1_V1_5_SHA1 *******
+*** TEE_ALG_RSASSA_PKCS1_V1_5_SHA256 *****
+*** TEE_ALG_RSASSA_PKCS1_V1_5_SHA512 *****
+*** TEE_ALG_RSASSA_PKCS1_PSS_MGF1_SHA1 ***
+*** TEE_ALG_RSASSA_PKCS1_PSS_MGF1_SHA256 *
+*** TEE_ALG_RSASSA_PKCS1_PSS_MGF1_SHA512 *
+******************************************
+** HASH **********************************
+*** TEE_ALG_MD5 **************************
+*** TEE_ALG_SHA1 *************************
+*** TEE_ALG_SHA256 ***********************
+*** TEE_ALG_SHA512 ***********************
+*****************************************/
+
 #include "ta_key_storage.h"
 #include "tee_internal_api.h"
 #include "tee_logging.h"
@@ -741,35 +771,6 @@ TEE_Result TA_EXPORT TA_InvokeCommandEntryPoint(void *sessionContext,
   }
 }
 
-/*****************************************
-** SUPPORTED ALGORITHMS ******************
-** AES CRYPTO ****************************
-*** TEE_ALG_AES_ECB_NOPAD ****************
-*** TEE_ALG_AES_CBC_NOPAD ****************
-*** TEE_ALG_AES_CTR **********************
-******************************************
-** RSA CRYPTO ****************************
-*** TEE_ALG_RSA_NOPAD ********************
-*** TEE_ALG_RSAES_PKCS1_V1_5 *************
-*** TEE_ALG_RSAES_PKCS1_OAEP_MGF1_SHA512 *
-*** TEE_ALG_RSAES_PKCS1_OAEP_MGF1_SHA256 *
-*** TEE_ALG_RSAES_PKCS1_OAEP_MGF1_SHA1 ***
-******************************************
-** RSA SIGN ******************************
-*** TEE_ALG_RSASSA_PKCS1_V1_5_MD5 ********
-*** TEE_ALG_RSASSA_PKCS1_V1_5_SHA1 *******
-*** TEE_ALG_RSASSA_PKCS1_V1_5_SHA256 *****
-*** TEE_ALG_RSASSA_PKCS1_V1_5_SHA512 *****
-*** TEE_ALG_RSASSA_PKCS1_PSS_MGF1_SHA1 ***
-*** TEE_ALG_RSASSA_PKCS1_PSS_MGF1_SHA256 *
-*** TEE_ALG_RSASSA_PKCS1_PSS_MGF1_SHA512 *
-******************************************
-** HASH **********************************
-*** TEE_ALG_MD5 **************************
-*** TEE_ALG_SHA1 *************************
-*** TEE_ALG_SHA256 ***********************
-*** TEE_ALG_SHA512 ***********************
-*****************************************/
 /*
 *
 * Should the secret keys be encrypted?
