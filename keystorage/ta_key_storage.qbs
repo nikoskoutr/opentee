@@ -1,7 +1,7 @@
 import qbs
 
 DynamicLibrary {
-    name: "ta_key_storage"
+    name: "ta_key_storage_final"
     Group {
         fileTagsFilter: "dynamiclibrary"
         qbs.install: true
@@ -16,5 +16,5 @@ DynamicLibrary {
     destinationDirectory: './TAs'
     cpp.defines: ["TA_PLUGIN"]
 
-    files: ["ta_key_storage.c", "../include/tee_ta_properties.h"]
+    files: ["ta_key_storage_final.c", "../include/tee_ta_properties.h"]
 }

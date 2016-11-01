@@ -40,14 +40,12 @@
 #define MAX_AES_KEYSIZE 256
 
 // Available command for the CA to call.
-enum {
-  ENCRYPTION = 0,
-  DECRYPTION = 1,
-  SIGNATURE = 2,
-  VERIFICATION = 3,
-  HASH = 4,
-  KEYGENERATION = 5
-}
+#define ENCRYPTION 0
+#define DECRYPTION 1
+#define SIGNATURE 2
+#define VERIFICATION 3
+#define HASH 4
+#define KEYGENERATION 5
 
 // Available modes for the TA to use.
 typedef enum {
@@ -115,7 +113,7 @@ static TEE_Result RSA_Operation(TEE_OperationMode mode, uint32_t algorithm,
   case TEE_MODE_ENCRYPT:
     // Encrypt the in_data with given key and put the result on out_data buffer.
     ret = TEE_AsymmetricEncrypt(rsa_operation, NULL, 0, in_data, in_data_len,
-                                out_data, out_data_len);
+                                out_data, &out_data_len);
     // If operation fails, log error to the system log.
     if (ret != TEE_SUCCESS) {
       OT_LOG(LOG_ERR, "TEE_AsymmetricEncrypt failed: 0x%x", ret);
@@ -125,7 +123,7 @@ static TEE_Result RSA_Operation(TEE_OperationMode mode, uint32_t algorithm,
   case TEE_MODE_DECRYPT:
     // Decrypt the in_data with given key and put the result on out_data buffer.
     ret = TEE_AsymmetricDecrypt(rsa_operation, NULL, 0, in_data, in_data_len,
-                                out_data, out_data_len);
+                                out_data, &out_data_len);
     // If operation fails, log error to the system log.
     if (ret != TEE_SUCCESS) {
       OT_LOG(LOG_ERR, "TEE_AsymmetricDecrypt failed: 0x%x", ret);
@@ -240,7 +238,7 @@ static TEE_Result digest_operation(uint32_t algorithm, void *in_data,
   TEE_OperationHandle dig_operation = NULL;
   // TEE_Result initialized as a success. On failure the value is changed
   // accordingly.
-  TEE_Result = TEE_SUCCESS;
+  TEE_Result ret = TEE_SUCCESS;
 
   // Allocate the cryptographic operation.
   ret = TEE_AllocateOperation(&dig_operation, algorithm, TEE_MODE_DIGEST, 0);
@@ -276,11 +274,10 @@ static TEE_Result digest_operation(uint32_t algorithm, void *in_data,
 * \param outkey        Pointer to witch the generated key will be written.
 */
 static TEE_Result generate_key(uint32_t key_size, uint32_t key_type,
-                               TEE_Attribute *params, uint32_t param_count,
                                TEE_ObjectHandle *outkey) {
   // TEE_Result initialized as a success. On failure the value is changed
   // accordingly.
-  TEE_Result = TEE_SUCCESS;
+  TEE_Result ret = TEE_SUCCESS;
 
   // Allocate the cryptographic operation.
   ret = TEE_AllocateTransientObject(key_type, key_size, outkey);
@@ -294,7 +291,7 @@ static TEE_Result generate_key(uint32_t key_size, uint32_t key_type,
 
   // Generate key according to the parameters given and the type of the
   // transient object.
-  ret = TEE_GenerateKey(*outkey, key_size, params, param_count);
+  ret = TEE_GenerateKey(*outkey, key_size, NULL, 0);
   // If operation fails, log error to the system log.
   if (ret != TEE_SUCCESS) {
     OT_LOG(LOG_ERR, "TEE_GenerateKey failed: 0x%x", ret);
@@ -343,20 +340,23 @@ static uint32_t find_available_objectID() {
                                    sizeof(objectID), 0, &object);
     // Check for ID availability. If an object is openned, it is closed.
     if (ret != TEE_SUCCESS) {
-      return objectID;
+      break;
     } else {
       TEE_CloseObject(object);
     }
   }
+  return objectID;
 }
 
 /*!
 * \brief store_key  Wraps the key storage operation.
 * \param key        The key to be stored.
 */
-static TEE_Result store_key(TEE_ObjectHandle key) {
+static TEE_Result store_key(TEE_ObjectHandle key, uint32_t *id_found) {
   // Find available ID for the key to be stored.
   uint32_t id = find_available_objectID();
+  // Write the ID of the key on CA returned value variable.
+  *id_found = id;
   // Null initialized object handle.
   TEE_ObjectHandle temp = NULL;
   // TEE_Result initialized as a success. On failure the value is changed
@@ -369,6 +369,7 @@ static TEE_Result store_key(TEE_ObjectHandle key) {
   // If operation fails, log the error and return.
   if (ret != TEE_SUCCESS) {
     OT_LOG(LOG_ERR, "TEE_CreatePersistentObject failed: 0x%x", ret);
+    *id_found = -1;
     return ret;
   }
 
@@ -386,7 +387,7 @@ static TEE_Result store_key(TEE_ObjectHandle key) {
 static TEE_Result get_key(TEE_ObjectHandle *key, uint32_t id) {
   // TEE_Result initialized as a success. On failure the value is changed
   // accordingly.
-  TEE_Result = TEE_SUCCESS;
+  TEE_Result ret = TEE_SUCCESS;
   // Null initialized object handle.
   TEE_ObjectHandle temp_key = NULL;
 
@@ -400,16 +401,16 @@ static TEE_Result get_key(TEE_ObjectHandle *key, uint32_t id) {
   }
 
   // Null initialized variable that will hold an oject info.
-  TEE_ObjectInfo info = NULL;
+  TEE_ObjectInfo info;
   // Get the object info of the temp_key to retain info about the object to be
   // returned.
-  ret = TEE_GetObjectInfo(temp_key, &info);
-  // If operation fails, log the error, close the object and return.
-  if (ret != TEE_SUCCESS) {
-    OT_LOG(LOG_ERR, "TEE_GetObjectInfo failed: 0x%x", ret);
-    TEE_CloseObject(temp_key);
-    return ret;
-  }
+  TEE_GetObjectInfo(temp_key, &info);
+  // // If operation fails, log the error, close the object and return.
+  // if (ret != TEE_SUCCESS) {
+  //   OT_LOG(LOG_ERR, "TEE_GetObjectInfo failed: 0x%x", ret);
+  //   TEE_CloseObject(temp_key);
+  //   return ret;
+  // }
 
   // Allocate a transient object with the info from the previous variable.
   ret = TEE_AllocateTransientObject(info.objectType, info.objectSize, key);
@@ -424,11 +425,11 @@ static TEE_Result get_key(TEE_ObjectHandle *key, uint32_t id) {
   // Copy all the attributes from persistent to transient object. The object
   // type of both objects is the same, so they are compatible and both keys will
   // be copied if RSA.
-  ret = TEE_CopyObjectAttributes(*key, temp_key);
-  // If operation fails, log the error.
-  if (ret != TEE_SUCCESS) {
-    OT_LOG(LOG_ERR, "TEE_CopyObjectAttributes failed: 0x%x", ret);
-  }
+  TEE_CopyObjectAttributes(*key, temp_key);
+  // // If operation fails, log the error.
+  // if (ret != TEE_SUCCESS) {
+  //   OT_LOG(LOG_ERR, "TEE_CopyObjectAttributes failed: 0x%x", ret);
+  // }
 
   // Always close both objects.
   TEE_CloseObject(*key);
@@ -453,7 +454,7 @@ static TEE_Result do_crypto(Operation op, Algorithm_type alg_type,
                             void *in_data, uint32_t in_data_len, void *out_data,
                             uint32_t *out_data_len) {
   // Null initialized mode.
-  TEE_OperationMode mode = NULL;
+  TEE_OperationMode mode;
   // Null initialized initialization vector.
   uint8_t *IV = NULL;
   // 0 initialized length.
@@ -469,14 +470,14 @@ static TEE_Result do_crypto(Operation op, Algorithm_type alg_type,
     // Set mode to TEE_MODE_ENCRYPT.
     mode = TEE_MODE_ENCRYPT;
     // Null initialized variable that will hold an oject info.
-    TEE_ObjectInfo info = NULL;
+    TEE_ObjectInfo info;
     // Get info from the key object.
-    ret = TEE_GetObjectInfo(key, &info);
-    // If operation fails, log the error and return.
-    if (ret != TEE_SUCCESS) {
-      OT_LOG(LOG_ERR, "TEE_GetObjectInfo failed: 0x%x", ret);
-      return ret;
-    }
+    // TEE_GetObjectInfo(key, &info);
+    // // If operation fails, log the error and return.
+    // if (ret != TEE_SUCCESS) {
+    //   OT_LOG(LOG_ERR, "TEE_GetObjectInfo failed: 0x%x", ret);
+    //   return ret;
+    // }
     // Set the length of the initialization vector the same size as the key.
     IV_len = (uint32_t)info.objectSize;
     // Generate random vector with given size.
@@ -488,7 +489,7 @@ static TEE_Result do_crypto(Operation op, Algorithm_type alg_type,
 
   // TEE_Result initialized as a success. On failure the value is changed
   // accordingly.
-  TEE_Result = TEE_SUCCESS;
+  TEE_Result ret = TEE_SUCCESS;
   // Switch the algorithm types RSA and AES.
   switch (alg_type) {
   case RSA:
@@ -510,6 +511,9 @@ static TEE_Result do_crypto(Operation op, Algorithm_type alg_type,
     }
     return ret;
   }
+  // Bad algorithm type.
+  OT_LOG(LOG_ERR, "Bad algorithm type.");
+  return TEE_ERROR_BAD_PARAMETERS;
 }
 
 /*!
@@ -550,8 +554,8 @@ static TEE_Result do_sign(Operation op, uint32_t hash_algorithm,
     }
 
     // Call the RSA signature operation with given hash and key.
-    ret = RSA_Operation(TEE_MODE_SIGN, algorithm, key, out_data, *out_data_len,
-                        out_data, *out_data_len);
+    ret = RSA_Operation(TEE_MODE_SIGN, sign_algorithm, key, out_data,
+                        *out_data_len, out_data, *out_data_len);
     // If operation fails, log the error and return.
     if (ret != TEE_SUCCESS) {
       OT_LOG(LOG_ERR, "Error at RSA_Operation: 0x%x", ret);
@@ -568,7 +572,7 @@ static TEE_Result do_sign(Operation op, uint32_t hash_algorithm,
     }
 
     // Call the RSA verification operation with given hash and key.
-    ret = RSA_Operation(TEE_MODE_VERIFY, algorithm, key, out_data,
+    ret = RSA_Operation(TEE_MODE_VERIFY, sign_algorithm, key, out_data,
                         *out_data_len, in_data, in_data_len);
     // If operation fails, log the error and return.
     if (ret != TEE_SUCCESS) {
@@ -616,6 +620,7 @@ TEE_Result TA_EXPORT TA_InvokeCommandEntryPoint(void *sessionContext,
                                                 uint32_t commandID,
                                                 uint32_t paramTypes,
                                                 TEE_Param params[4]) {
+  sessionContext = sessionContext;
   // Parameter Check.
   if (TEE_PARAM_TYPE_GET(paramTypes, 0) != TEE_PARAM_TYPE_VALUE_INOUT ||
       TEE_PARAM_TYPE_GET(paramTypes, 1) != TEE_PARAM_TYPE_VALUE_INOUT) {
@@ -636,8 +641,7 @@ TEE_Result TA_EXPORT TA_InvokeCommandEntryPoint(void *sessionContext,
   TEE_Result ret = TEE_SUCCESS;
 
   // Switch available commands.
-  switch (commandID) {
-  case ENCRYPTION:
+  if (commandID == ENCRYPTION) {
     // Null initialized object handle to the key.
     TEE_ObjectHandle key = NULL;
     // Get the key from given id.
@@ -650,7 +654,7 @@ TEE_Result TA_EXPORT TA_InvokeCommandEntryPoint(void *sessionContext,
     // Output buffer size.
     uint32_t out_size;
     // Call cryptographic operation.
-    ret = do_crypto(ENCRYPT, parms[0].value.b, key, params[1].value.a,
+    ret = do_crypto(ENCRYPT, params[0].value.b, key, params[1].value.a,
                     params[2].memref.buffer, params[2].memref.size,
                     params[3].memref.buffer, &out_size);
     // If operation fails, log the error.
@@ -661,7 +665,31 @@ TEE_Result TA_EXPORT TA_InvokeCommandEntryPoint(void *sessionContext,
     TEE_FreeTransientObject(key);
     // Return the result.
     return ret;
-  case DECRYPTION:
+  } else if (commandID == DECRYPTION) {
+    // Null initialized object handle to the key.
+    TEE_ObjectHandle key = NULL;
+    // Get the key from given id.
+    ret = get_key(&key, params[0].value.a);
+    // If operation fails, log and return.
+    if (ret != TEE_SUCCESS) {
+      OT_LOG(LOG_ERR, "Get key operation failed");
+      return ret;
+    }
+
+    // Call cryptographic operation.
+    ret =
+        do_crypto(DECRYPT, params[0].value.b, key, params[1].value.a,
+                  params[2].memref.buffer, params[2].memref.size,
+                  params[3].memref.buffer, (uint32_t *)&params[3].memref.size);
+    // If operation fails, log the error.
+    if (ret != TEE_SUCCESS || params[3].memref.size == 0) {
+      OT_LOG(LOG_ERR, "Decryption operation failed");
+    }
+    // Free the transient object.
+    TEE_FreeTransientObject(key);
+    // Return the result.
+    return ret;
+  } else if (commandID == SIGNATURE) {
     // Null initialized object handle to the key.
     TEE_ObjectHandle key = NULL;
     // Get the key from given id.
@@ -673,32 +701,8 @@ TEE_Result TA_EXPORT TA_InvokeCommandEntryPoint(void *sessionContext,
     }
     // Output buffer size.
     uint32_t out_size;
-    // Call cryptographic operation.
-    ret = do_crypto(DECRYPT, params[0].value.b, key, params[1].value.a,
-                    params[2].memref.buffer, params.memref.size,
-                    params[3].memref.buffer, &out_size);
-    // If operation fails, log the error.
-    if (ret != TEE_SUCCESS || out_size == 0) {
-      OT_LOG(LOG_ERR, "Decryption operation failed");
-    }
-    // Free the transient object.
-    TEE_FreeTransientObject(key);
-    // Return the result.
-    return ret;
-  case SIGNATURE:
-    // Null initialized object handle to the key.
-    TEE_ObjectHandle key = null;
-    // Get the key from given id.
-    ret = get_key(&key, params.value.a);
-    // If operation fails, log and return.
-    if (ret != TEE_SUCCESS) {
-      OT_LOG(LOG_ERR, "Get key operation failed");
-      return ret;
-    }
-    // Output buffer size.
-    uint32_t out_size;
     // Call signing operation.
-    ret = do_sign(SIGN, parms[0].value.b, parms[1].value.a, key,
+    ret = do_sign(SIGN, params[0].value.b, params[1].value.a, key,
                   params[2].memref.buffer, params[2].memref.size,
                   params[3].memref.buffer, &out_size);
     // If operation fails, log the error.
@@ -710,11 +714,11 @@ TEE_Result TA_EXPORT TA_InvokeCommandEntryPoint(void *sessionContext,
     TEE_FreeTransientObject(key);
     // Return the result.
     return ret;
-  case VERIFICATION:
+  } else if (commandID == VERIFICATION) {
     // Null initialized object handle to the key.
-    TEE_ObjectHandle key = null;
+    TEE_ObjectHandle key = NULL;
     // Get the key from given id.
-    ret = get_key(&key, params.value.a);
+    ret = get_key(&key, params[0].value.a);
     // If operation fails, log and return.
     if (ret != TEE_SUCCESS) {
       OT_LOG(LOG_ERR, "Get key operation failed");
@@ -723,7 +727,7 @@ TEE_Result TA_EXPORT TA_InvokeCommandEntryPoint(void *sessionContext,
     // Output buffer size.
     uint32_t out_size = params[3].memref.size;
     // Call verification operation.
-    ret = do_sign(SIGN, parms[0].value.b, parms[1].value.a, key,
+    ret = do_sign(SIGN, params[0].value.b, params[1].value.a, key,
                   params[2].memref.buffer, params[2].memref.size,
                   params[3].memref.buffer, &out_size);
     // If operation fails, log the error.
@@ -735,7 +739,7 @@ TEE_Result TA_EXPORT TA_InvokeCommandEntryPoint(void *sessionContext,
     TEE_FreeTransientObject(key);
     // Return the result.
     return ret;
-  case HASH:
+  } else if (commandID == HASH) {
     // Output buffer size.
     uint32_t out_size;
     // Call hash operation.
@@ -746,11 +750,11 @@ TEE_Result TA_EXPORT TA_InvokeCommandEntryPoint(void *sessionContext,
       OT_LOG(LOG_ERR, "Hash operation failed");
     }
     return ret;
-  case KEYGENERATION:
+  } else if (commandID == KEYGENERATION) {
     // Null initialized object handle to the key.
     TEE_ObjectHandle key = NULL;
     // Call key generation operation.
-    ret = generate_key(params[0].value.a, params[0].value.b, NULL, 0, &key);
+    ret = generate_key(params[0].value.a, params[0].value.b, &key);
     // If operation fails, log the error and return.
     if (ret != TEE_SUCCESS) {
       OT_LOG(LOG_ERR, "Key generation operation failed");
@@ -758,7 +762,7 @@ TEE_Result TA_EXPORT TA_InvokeCommandEntryPoint(void *sessionContext,
     }
 
     // Call key storage operation.
-    ret = store_key(key);
+    ret = store_key(key, &params[0].value.a);
     // If operation fails, log the error.
     if (ret != TEE_SUCCESS) {
       OT_LOG(LOG_ERR, "Key storage operation failed");
@@ -768,6 +772,9 @@ TEE_Result TA_EXPORT TA_InvokeCommandEntryPoint(void *sessionContext,
     TEE_FreeTransientObject(key);
     // Return the result.
     return ret;
+  } else {
+    OT_LOG(LOG_ERR, "Bad command.");
+    return TEE_ERROR_BAD_PARAMETERS;
   }
 }
 
