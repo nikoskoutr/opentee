@@ -1,5 +1,7 @@
 #include "tee_client_api.h"
 #include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
 
 // Available commands
 #define ENCRYPTION 0
@@ -36,8 +38,41 @@ int main() {
                                           TEEC_MEMREF_WHOLE, TEEC_MEMREF_WHOLE);
   operation.params[0].value.a = 256;
   operation.params[0].value.b = TEE_TYPE_RSA_KEYPAIR;
-  operation.params[2].memref.parent = NULL;
-  operation.params[3].memref.parent = NULL;
+  operation.params[1].value.a = -1;
+  operation.params[1].value.b = -1;
+  printf("-- Registering shared memories.\n");
+  char *p = malloc(10);
+  char *result = malloc(40);
+
+  memset(p, 'z', 10);
+  memset(result, 'z', 40);
+
+  in_mem.buffer = p;
+  in_mem.size = 10;
+  in_mem.flags = TEEC_MEM_INPUT | TEEC_MEM_OUTPUT;
+
+  out_mem.buffer = result;
+  out_mem.size = 40;
+  out_mem.flags = TEEC_MEM_INPUT | TEEC_MEM_OUTPUT;
+
+  ret = TEEC_RegisterSharedMemory(&context, &in_mem);
+  if (ret != TEEC_SUCCESS) {
+    printf("!! Error registering input memory 0x%x\n", ret);
+    TEEC_CloseSession(&session);
+    TEEC_FinalizeContext(&context);
+    return 0;
+  }
+
+  ret = TEEC_RegisterSharedMemory(&context, &out_mem);
+  if (ret != TEEC_SUCCESS) {
+    printf("!! Error registering output memory 0x%x\n", ret);
+    TEEC_CloseSession(&session);
+    TEEC_FinalizeContext(&context);
+    return 0;
+  }
+
+  operation.params[2].memref.parent = &in_mem;
+  operation.params[3].memref.parent = &out_mem;
 
   printf("-- Opening session.\n");
   ret = TEEC_OpenSession(&context, &session, &uuid, TEEC_LOGIN_PUBLIC, NULL,
@@ -61,34 +96,9 @@ int main() {
   printf("-- Key generation successful, the key id is: %d\n", key_id);
   printf("++ Enter key to encrypt:\n");
   fflush(stdout);
-  char *p;
-  char *result;
+
   char line[10];
   p = fgets(line, 10, stdin);
-
-  printf("-- Registering shared memories.");
-  in_mem.buffer = p;
-  in_mem.size = 10;
-  in_mem.flags = TEEC_MEM_INPUT | TEEC_MEM_OUTPUT;
-
-  out_mem.buffer = result;
-  out_mem.size = 40;
-  out_mem.flags = TEEC_MEM_INPUT | TEEC_MEM_OUTPUT;
-
-  ret = TEEC_RegisterSharedMemory(&context, &in_mem);
-  if (ret != TEEC_SUCCESS) {
-    printf("!! Error registering input memory 0x%x\n", ret);
-    TEEC_CloseSession(&session);
-    TEEC_FinalizeContext(&context);
-    return 0;
-  }
-  ret = TEEC_RegisterSharedMemory(&context, &out_mem);
-  if (ret != TEEC_SUCCESS) {
-    printf("!! Error registering output memory 0x%x\n", ret);
-    TEEC_CloseSession(&session);
-    TEEC_FinalizeContext(&context);
-    return 0;
-  }
 
   operation.params[2].memref.parent = &in_mem;
   operation.params[3].memref.parent = &out_mem;
@@ -114,6 +124,7 @@ int main() {
 
   out_mem.buffer = p;
   out_mem.size = 10;
+
   ret = TEEC_InvokeCommand(&session, DECRYPTION, &operation, NULL);
   if (ret != TEEC_SUCCESS) {
     printf("!! Error decrypting 0x%x\n", ret);
