@@ -27,6 +27,7 @@
 *** TEE_ALG_SHA256 ***********************
 *** TEE_ALG_SHA512 ***********************
 *****************************************/
+
 #include "ta_key_storage.h"
 #include "tee_internal_api.h"
 #include "tee_logging.h"
@@ -603,11 +604,10 @@ void TA_EXPORT TA_DestroyEntryPoint(void) {
 TEE_Result TA_EXPORT TA_OpenSessionEntryPoint(uint32_t paramTypes,
                                               TEE_Param params[4],
                                               void **sessionContext) {
-  OT_LOG(LOG_ERR, "Calling the Open session entry point");
   paramTypes = paramTypes;
-  params = params;
   sessionContext = sessionContext;
-
+  params = params;
+  OT_LOG(LOG_ERR, "Calling the Open session entry point");
   return TEE_SUCCESS;
 }
 

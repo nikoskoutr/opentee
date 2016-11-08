@@ -2,7 +2,7 @@ import qbs
 
 CppApplication {
     type: "application"
-    name: "keystorage_app"
+    name: "ca_keystorage_test"
     Group {
         name: "project-install"
         fileTagsFilter: "application"
@@ -11,8 +11,9 @@ CppApplication {
     }
 
     Depends { name: "tee" }
+    Depends { name: "cpp"}
     consoleApplication: true
     destinationDirectory: '.'
 
-    files: ['ca_keystoragetest_new.c']
+    files: ['ca_keystorage_test.c']
 }

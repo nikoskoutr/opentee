@@ -1,10 +1,5 @@
 #!/bin/bash
 
-cp ../openteeproject/keystorage/ca_keystoragetest_new.c CAs/keystorage/
-cp ../openteeproject/keystorage/ca_keystorage_test.h CAs/keystorage/
-cp ../openteeproject/keystorage/ca_keystorage_test.qbs CAs/keystorage/
-cp ../openteeproject/keystorage/ta_keystorage_final.c TAs/keystorage/
-cp ../openteeproject/keystorage/ta_key_storage.qbs TAs/keystorage/
-cp ../openteeproject/keystorage/ta_key_storage.h TAs/keystorage/
+cp ../opentee/keystorage/ca_keystorage_test.* CAs/keystorage/
+cp ../opentee/keystorage/ta_key_storage.* TAs/keystorage/
 qbs debug
-debug/keystorage_app
