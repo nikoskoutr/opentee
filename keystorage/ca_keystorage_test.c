@@ -1,18 +1,20 @@
-//#include "ca_keystorage_test.h"
 #include "tee_client_api.h"
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 
-#define INVOKE_COMMAND_STOREKEY 0
-#define INVOKE_COMMAND_GETKEY 1
-#define INVOKE_COMMAND_REMOVEKEY 2
-#define INVOKE_COMMAND_UPDATEKEY 3
-#define DUMMY_TEST 4
+// Available commands
+#define ENCRYPTION 0
+#define DECRYPTION 1
+#define SIGNATURE 2
+#define VERIFICATION 3
+#define HASH 4
+#define KEYGENERATION 5
 
-#define PRI(str, ...) printf(str, ##__VA_ARGS__);
-#define PRIn(str, ...) printf(str "\n", ##__VA_ARGS__);
-#define DATA_SIZE 10
+#define TEE_TYPE_RSA_KEYPAIR 0xA1000030
+#define TEE_ALG_RSA_NOPAD 0x60000030
+
+typedef enum { RSA = 0, AES = 1 } Algorithm_type;
 
 static const TEEC_UUID uuid = {
     0x25081234, 0x4132, 0x5532, {'k', 'e', 'y', 's', 't', 'o', 'r', 'e'}};
@@ -21,76 +23,119 @@ int main() {
   TEEC_Context context;
   TEEC_Session session;
   TEEC_Operation operation;
-  TEEC_SharedMemory inout_mem;
+  TEEC_SharedMemory in_mem;
   TEEC_SharedMemory out_mem;
-  TEEC_Result tee_rv;
-  uint8_t data[DATA_SIZE];
+  TEEC_Result ret;
 
-  memset((void *)(&inout_mem), 0, sizeof(inout_mem));
-  memset((void *)&out_mem, 0, sizeof(out_mem));
-  memset((void *)&operation, 0, sizeof(operation));
-  memset(data, 'y', sizeof(data));
-
-  tee_rv = TEEC_InitializeContext(NULL, &context);
-  if (tee_rv != TEEC_SUCCESS) {
-    printf("TEEC_InitializeContext failed: 0x%x\n", tee_rv);
+  printf("-- Initializing context.\n");
+  ret = TEEC_InitializeContext(NULL, &context);
+  if (ret != TEEC_SUCCESS) {
+    printf("!! TEEC_InitializeContext failed: 0x%x\n", ret);
+    return 0;
   }
 
-  operation.paramTypes = TEEC_PARAM_TYPES(TEEC_MEMREF_WHOLE, TEEC_VALUE_INOUT,
-                                          TEEC_NONE, TEEC_NONE);
-
-  tee_rv = TEEC_OpenSession(&context, &session, &uuid, TEEC_LOGIN_PUBLIC, NULL,
-                            &operation, NULL);
-  if (tee_rv != TEEC_SUCCESS) {
-    printf("TEEC_OpenSession failed: 0x%x\n", tee_rv);
-  }
-
-  inout_mem.buffer = data;
-  inout_mem.size = DATA_SIZE;
-  inout_mem.flags = TEEC_MEM_INPUT | TEEC_MEM_OUTPUT;
-
-  tee_rv = TEEC_RegisterSharedMemory(&context, &inout_mem);
-  if (tee_rv != TEE_SUCCESS) {
-    printf("Failed to register DATA shared memory\n");
-  }
-
-  printf("Registered in mem..\n");
-
-  operation.paramTypes = TEEC_PARAM_TYPES(TEEC_MEMREF_WHOLE, TEEC_VALUE_INOUT,
-                                          TEEC_NONE, TEEC_NONE);
-  operation.params[0].memref.parent = &inout_mem;
+  operation.paramTypes = TEEC_PARAM_TYPES(TEEC_VALUE_INOUT, TEEC_VALUE_INOUT,
+                                          TEEC_MEMREF_WHOLE, TEEC_MEMREF_WHOLE);
+  operation.params[0].value.a = 256;
+  operation.params[0].value.b = TEE_TYPE_RSA_KEYPAIR;
   operation.params[1].value.a = 0;
+  operation.params[1].value.b = 0;
 
-  printf("Invoking command: Update sha1: ");
-  // tee_rv =
-  //     TEEC_InvokeCommand(&session, INVOKE_COMMAND_STOREKEY, &operation,
-  //     NULL);
-  // if (tee_rv != TEE_SUCCESS) {
-  //   printf("Failed to invoke command %x\n", tee_rv);
-  // }
-  printf("%d\n", operation.params[1].value.a);
-  // uint32_t id = operation.params[1].value.a;
-  memset(data, 'z', sizeof(data));
-  tee_rv =
-      TEEC_InvokeCommand(&session, INVOKE_COMMAND_GETKEY, &operation, NULL);
-
-  // tee_rv =
-  //     TEEC_InvokeCommand(&session, INVOKE_COMMAND_STOREKEY, &operation,
-  //     NULL);
-  //
-  // if (tee_rv != TEEC_SUCCESS) {
-  //   printf("TEEC_InvokeCommand failed: 0x%x\n", tee_rv);
-  // }
-  //
-  // memset(data, '0', DATA_SIZE);
-  // tee_rv =
-  //     TEEC_InvokeCommand(&session, INVOKE_COMMAND_GETKEY, &operation, NULL);
-  //
-  // memset((void *)(&data), 1, sizeof(data));
-  char *buf = inout_mem.buffer;
-  for (int i = 0; i < DATA_SIZE; i++) {
-
-    printf(" %c\n", *buf);
-    buf++;
+  printf("-- Opening session.\n");
+  ret = TEEC_OpenSession(&context, &session, &uuid, TEEC_LOGIN_PUBLIC, NULL,
+                         &operation, NULL);
+  if (ret != TEEC_SUCCESS) {
+    printf("!! TEEC_OpenSession failed: 0x%x\n", ret);
+    TEEC_FinalizeContext(&context);
+    return 0;
   }
+
+  printf("-- Invoking command: Key Generation:\n");
+  ret = TEEC_InvokeCommand(&session, KEYGENERATION, &operation, NULL);
+  if (ret != TEEC_SUCCESS) {
+    printf("!! Error generating key 0x%x\n", ret);
+    TEEC_CloseSession(&session);
+    TEEC_FinalizeContext(&context);
+    return 0;
+  }
+
+  uint32_t key_id = operation.params[0].value.a;
+  printf("-- Key generation successful, the key id is: %d\n", key_id);
+
+  printf("-- Registering shared memories.\n");
+  char *p = malloc(10);
+  char *result = malloc(40);
+
+  memset((void *)&in_mem, 'z', sizeof(in_mem));
+  memset((void *)&out_mem, 'z', sizeof(out_mem));
+  memset(p, 'z', 10);
+  memset(result, 'z', 40);
+
+  in_mem.buffer = p;
+  in_mem.size = 10;
+  in_mem.flags = TEEC_MEM_INPUT | TEEC_MEM_OUTPUT;
+
+  out_mem.buffer = result;
+  out_mem.size = 40;
+  out_mem.flags = TEEC_MEM_INPUT | TEEC_MEM_OUTPUT;
+
+  ret = TEEC_RegisterSharedMemory(&context, &in_mem);
+  if (ret != TEEC_SUCCESS) {
+    printf("!! Error registering input memory 0x%x\n", ret);
+    TEEC_CloseSession(&session);
+    TEEC_FinalizeContext(&context);
+    return 0;
+  }
+
+  ret = TEEC_RegisterSharedMemory(&context, &out_mem);
+  if (ret != TEEC_SUCCESS) {
+    printf("!! Error registering output memory 0x%x\n", ret);
+    TEEC_CloseSession(&session);
+    TEEC_FinalizeContext(&context);
+    return 0;
+  }
+
+  printf("++ Enter key to encrypt:\n");
+  fflush(stdout);
+
+  char line[10];
+  p = fgets(line, 10, stdin);
+
+  operation.params[2].memref.parent = &in_mem;
+  operation.params[3].memref.parent = &out_mem;
+
+  printf("-- Encrypting with generated RSA key.");
+  operation.params[0].value.a = key_id;
+  operation.params[0].value.b = RSA;
+  operation.params[1].value.a = TEE_ALG_RSA_NOPAD;
+  ret = TEEC_InvokeCommand(&session, ENCRYPTION, &operation, NULL);
+  if (ret != TEEC_SUCCESS) {
+    printf("!! Error encrypting 0x%x\n", ret);
+    TEEC_CloseSession(&session);
+    TEEC_FinalizeContext(&context);
+    return 0;
+  }
+
+  printf("-- Successful encryption\n");
+  printf("-- The encrypted string is: %s\n", result);
+
+  printf("-- Decrypting with generated RSA key.");
+  in_mem.buffer = result;
+  in_mem.size = 40;
+
+  out_mem.buffer = p;
+  out_mem.size = 10;
+
+  ret = TEEC_InvokeCommand(&session, DECRYPTION, &operation, NULL);
+  if (ret != TEEC_SUCCESS) {
+    printf("!! Error decrypting 0x%x\n", ret);
+    TEEC_CloseSession(&session);
+    TEEC_FinalizeContext(&context);
+    return 0;
+  }
+
+  printf("-- Test operation ended successfuly");
+  TEEC_CloseSession(&session);
+  TEEC_FinalizeContext(&context);
+  return 0;
 }
