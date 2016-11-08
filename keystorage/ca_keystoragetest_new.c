@@ -38,12 +38,36 @@ int main() {
                                           TEEC_MEMREF_WHOLE, TEEC_MEMREF_WHOLE);
   operation.params[0].value.a = 256;
   operation.params[0].value.b = TEE_TYPE_RSA_KEYPAIR;
-  operation.params[1].value.a = -1;
-  operation.params[1].value.b = -1;
+  operation.params[1].value.a = 0;
+  operation.params[1].value.b = 0;
+
+  printf("-- Opening session.\n");
+  ret = TEEC_OpenSession(&context, &session, &uuid, TEEC_LOGIN_PUBLIC, NULL,
+                         &operation, NULL);
+  if (ret != TEEC_SUCCESS) {
+    printf("!! TEEC_OpenSession failed: 0x%x\n", ret);
+    TEEC_FinalizeContext(&context);
+    return 0;
+  }
+
+  printf("-- Invoking command: Key Generation:\n");
+  ret = TEEC_InvokeCommand(&session, KEYGENERATION, &operation, NULL);
+  if (ret != TEEC_SUCCESS) {
+    printf("!! Error generating key 0x%x\n", ret);
+    TEEC_CloseSession(&session);
+    TEEC_FinalizeContext(&context);
+    return 0;
+  }
+
+  uint32_t key_id = operation.params[0].value.a;
+  printf("-- Key generation successful, the key id is: %d\n", key_id);
+
   printf("-- Registering shared memories.\n");
   char *p = malloc(10);
   char *result = malloc(40);
 
+  memset((void *)&in_mem, 'z', sizeof(in_mem));
+  memset((void *)&out_mem, 'z', sizeof(out_mem));
   memset(p, 'z', 10);
   memset(result, 'z', 40);
 
@@ -71,29 +95,6 @@ int main() {
     return 0;
   }
 
-  operation.params[2].memref.parent = &in_mem;
-  operation.params[3].memref.parent = &out_mem;
-
-  printf("-- Opening session.\n");
-  ret = TEEC_OpenSession(&context, &session, &uuid, TEEC_LOGIN_PUBLIC, NULL,
-                         &operation, NULL);
-  if (ret != TEEC_SUCCESS) {
-    printf("!! TEEC_OpenSession failed: 0x%x\n", ret);
-    TEEC_FinalizeContext(&context);
-    return 0;
-  }
-
-  printf("-- Invoking command: Key Generation:\n");
-  ret = TEEC_InvokeCommand(&session, KEYGENERATION, &operation, NULL);
-  if (ret != TEEC_SUCCESS) {
-    printf("!! Error generating key 0x%x\n", ret);
-    TEEC_CloseSession(&session);
-    TEEC_FinalizeContext(&context);
-    return 0;
-  }
-
-  uint32_t key_id = operation.params[0].value.a;
-  printf("-- Key generation successful, the key id is: %d\n", key_id);
   printf("++ Enter key to encrypt:\n");
   fflush(stdout);
 
