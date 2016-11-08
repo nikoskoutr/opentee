@@ -1,15 +1,15 @@
-# example TA
+# Keystorage TA
 
-ta_LTLIBRARIES += libta_keystorage.la
+ta_LTLIBRARIES += libta_key_storage.la
 
-libta_keystorage_la_includes = \
+libta_key_storage_la_includes = \
         include/tee_ta_properties.h
 
-libta_keystorage_la_SOURCES = $(libta_keystorage_la_includes) \
-	keystorage/ta_keystorage_final.c
+libta_key_storage_la_SOURCES = $(libta_key_storage_la_includes) \
+	keystorage/ta_key_storage.c
 
-libta_keystorage_la_CFLAGS = ${AM_CFLAGS} \
+libta_key_storage_la_CFLAGS = ${AM_CFLAGS} \
         -iquote $(top_srcdir)/include \
         -iquote $(top_srcdir)/../emulator/include
 
-libta_keystorage_la_LDFLAGS = ${AM_LDFLAGS}
+libta_key_storage_la_LDFLAGS = ${AM_LDFLAGS}

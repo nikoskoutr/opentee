@@ -1,0 +1,15 @@
+# Keystorage executable
+
+bin_PROGRAMS += keystorage_app
+
+ca_keystorage_test_SOURCES = \
+     keystorage/ca_keystorage_test.c
+
+ca_keystorage_test_CFLAGS = ${AM_CFLAGS} \
+     -iquote $(top_srcdir)/../libtee/include
+
+ca_keystorage_test_LDFLAGS = ${AM_LDFLAGS} \
+      -rdynamic
+
+ca_keystorage_test_LDADD = \
+      ../libtee/libtee.la

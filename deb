@@ -1,5 +1,7 @@
 #!/bin/bash
 
 cp ../opentee/keystorage/ca_keystorage_test.* CAs/keystorage/
+cp ../opentee/keystorage/MakemoduleCA.am CAs/keystorage/
 cp ../opentee/keystorage/ta_key_storage.* TAs/keystorage/
+cp ../opentee/keystorage/Makemodule.am TAs/keystorage/
 qbs debug
