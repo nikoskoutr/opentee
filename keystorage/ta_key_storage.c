@@ -27,9 +27,22 @@
 *** TEE_ALG_SHA256 ***********************
 *** TEE_ALG_SHA512 ***********************
 *****************************************/
-#include "ta_key_storage.h"
+// #include "ta_key_storage.h"
 #include "tee_internal_api.h"
 #include "tee_logging.h"
+
+#ifdef TA_PLUGIN
+#include "tee_ta_properties.h"
+SET_TA_PROPERTIES({0x25081234,
+                   0x4132,
+                   0x5532,
+                   {'k', 'e', 'y', 's', 't', 'o', 'r', 'e'}}, /* UUID */
+                  512,                                        /* dataSize */
+                  255,                                        /* stackSize */
+                  1, /* singletonInstance */
+                  1, /* multiSession */
+                  1) /* instanceKeepAlive */
+#endif
 
 // Helper function.
 #define BYTES2BITS(bytes) (bytes * 8)
