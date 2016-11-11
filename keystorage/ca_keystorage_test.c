@@ -17,12 +17,12 @@
 typedef enum { RSA = 0, AES = 1 } Algorithm_type;
 
 static const TEEC_UUID uuid = {
-    0x25081234, 0x4132, 0x5532, {'k', 'e', 'y', 's', 't', 'o', 'r', 'e'}};
+    0x3E93872E, 0xAAB0, 0x4C7E, {'K', 'E', 'Y', 'S', 'T', 'O', 'R', 'E'}};
 
 int main() {
   TEEC_Context context;
   TEEC_Session session;
-  TEEC_Operation operation;
+  TEEC_Operation operation = {0};
   TEEC_SharedMemory in_mem;
   TEEC_SharedMemory out_mem;
   TEEC_Result ret;
@@ -50,33 +50,22 @@ int main() {
     return 0;
   }
 
-  printf("-- Invoking command: Key Generation:\n");
-  ret = TEEC_InvokeCommand(&session, KEYGENERATION, &operation, NULL);
-  if (ret != TEEC_SUCCESS) {
-    printf("!! Error generating key 0x%x\n", ret);
-    TEEC_CloseSession(&session);
-    TEEC_FinalizeContext(&context);
-    return 0;
-  }
-
-  uint32_t key_id = operation.params[0].value.a;
-  printf("-- Key generation successful, the key id is: %d\n", key_id);
-
-  printf("-- Registering shared memories.\n");
-  char *p = malloc(10);
-  char *result = malloc(40);
+  char *p = malloc(20);
+  char *result = malloc(20);
 
   memset((void *)&in_mem, 'z', sizeof(in_mem));
   memset((void *)&out_mem, 'z', sizeof(out_mem));
-  memset(p, 'z', 10);
-  memset(result, 'z', 40);
+  memset(p, 'z', 20);
+  memset(result, 'z', 20);
+
+  printf("-- Registering shared memories.\n");
 
   in_mem.buffer = p;
-  in_mem.size = 10;
+  in_mem.size = 20;
   in_mem.flags = TEEC_MEM_INPUT | TEEC_MEM_OUTPUT;
 
   out_mem.buffer = result;
-  out_mem.size = 40;
+  out_mem.size = 20;
   out_mem.flags = TEEC_MEM_INPUT | TEEC_MEM_OUTPUT;
 
   ret = TEEC_RegisterSharedMemory(&context, &in_mem);
@@ -95,16 +84,28 @@ int main() {
     return 0;
   }
 
-  printf("++ Enter key to encrypt:\n");
-  fflush(stdout);
-
-  char line[10];
-  p = fgets(line, 10, stdin);
-
   operation.params[2].memref.parent = &in_mem;
   operation.params[3].memref.parent = &out_mem;
 
-  printf("-- Encrypting with generated RSA key.");
+  printf("-- Invoking command: Key Generation:\n");
+  ret = TEEC_InvokeCommand(&session, KEYGENERATION, &operation, NULL);
+  if (ret != TEEC_SUCCESS) {
+    printf("!! Error generating key 0x%x\n", ret);
+    TEEC_CloseSession(&session);
+    TEEC_FinalizeContext(&context);
+    return 0;
+  }
+
+  uint32_t key_id = operation.params[0].value.a;
+  printf("-- Key generation successful, the key id is: %d\n-- And the rsa "
+         "modulo is: %d",
+         key_id, (uint32_t)operation.params[1].value.b);
+
+  printf("++ Enter key to encrypt:\n");
+
+  fgets(p, 20, stdin);
+
+  printf("-- Encrypting with generated RSA key.\n");
   operation.params[0].value.a = key_id;
   operation.params[0].value.b = RSA;
   operation.params[1].value.a = TEE_ALG_RSA_NOPAD;
@@ -117,14 +118,41 @@ int main() {
   }
 
   printf("-- Successful encryption\n");
-  printf("-- The encrypted string is: %s\n", result);
+  printf("-- The encrypted string is: %s\n-- And it's size is:%d\n",
+         (char *)result, (uint32_t)operation.params[3].memref.size);
 
-  printf("-- Decrypting with generated RSA key.");
+  operation.params[2].memref.parent = &in_mem;
+  operation.params[3].memref.parent = &out_mem;
+
+  printf("-- Opening session.\n");
+  ret = TEEC_OpenSession(&context, &session, &uuid, TEEC_LOGIN_PUBLIC, NULL,
+                         &operation, NULL);
+  if (ret != TEEC_SUCCESS) {
+    printf("!! TEEC_OpenSession failed: 0x%x\n", ret);
+    TEEC_FinalizeContext(&context);
+    return 0;
+  }
+
+  printf("-- Decrypting with generated RSA key.\n");
+
   in_mem.buffer = result;
-  in_mem.size = 40;
+  in_mem.size = 20;
 
+  TEEC_ReleaseSharedMemory(&out_mem);
+  TEEC_ReleaseSharedMemory(&in_mem);
+  free(p);
+
+  p = malloc(256);
   out_mem.buffer = p;
-  out_mem.size = 10;
+  out_mem.size = 256;
+
+  ret = TEEC_RegisterSharedMemory(&context, &out_mem);
+  if (ret != TEEC_SUCCESS) {
+    printf("!! Error registering output memory 0x%x\n", ret);
+    TEEC_CloseSession(&session);
+    TEEC_FinalizeContext(&context);
+    return 0;
+  }
 
   ret = TEEC_InvokeCommand(&session, DECRYPTION, &operation, NULL);
   if (ret != TEEC_SUCCESS) {

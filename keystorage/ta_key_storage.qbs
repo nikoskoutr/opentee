@@ -1,18 +1,21 @@
 import qbs
 
-DynamicLibrary {
-    name: "ta_key_storage"
+ DynamicLibrary {
+     name: "ta_key_storage"
+     Group {
+         name: "project-install"
+         fileTagsFilter: "dynamiclibrary"
+         qbs.install: false
+         qbs.installDir: "TAs"
+     }
 
-    Depends { name: "cpp" }
-    Depends { name: "InternalApi" }
+     Depends { name: "cpp" }
+     Depends { name: "InternalApi" }
 
-    cpp.includePaths: ["../include"]
+     cpp.includePaths: ["../include"]
 
-    destinationDirectory: './TAs'
-    cpp.defines: ["TA_PLUGIN"]
+     destinationDirectory: './TAs'
+     cpp.defines: ["TA_PLUGIN"]
 
-    files: [
-    "ta_key_storage.c",
-    "../include/tee_ta_properties.h"
-    ]
-}
+     files: ["ta_key_storage.c", "../include/tee_ta_properties.h"]
+ }

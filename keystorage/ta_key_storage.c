@@ -1,47 +1,12 @@
-/*****************************************
-** SUPPORTED ALGORITHMS ******************
-** AES CRYPTO ****************************
-*** TEE_ALG_AES_ECB_NOPAD ****************
-*** TEE_ALG_AES_CBC_NOPAD ****************
-*** TEE_ALG_AES_CTR **********************
-******************************************
-** RSA CRYPTO ****************************
-*** TEE_ALG_RSA_NOPAD ********************
-*** TEE_ALG_RSAES_PKCS1_V1_5 *************
-*** TEE_ALG_RSAES_PKCS1_OAEP_MGF1_SHA512 *
-*** TEE_ALG_RSAES_PKCS1_OAEP_MGF1_SHA256 *
-*** TEE_ALG_RSAES_PKCS1_OAEP_MGF1_SHA1 ***
-******************************************
-** RSA SIGN ******************************
-*** TEE_ALG_RSASSA_PKCS1_V1_5_MD5 ********
-*** TEE_ALG_RSASSA_PKCS1_V1_5_SHA1 *******
-*** TEE_ALG_RSASSA_PKCS1_V1_5_SHA256 *****
-*** TEE_ALG_RSASSA_PKCS1_V1_5_SHA512 *****
-*** TEE_ALG_RSASSA_PKCS1_PSS_MGF1_SHA1 ***
-*** TEE_ALG_RSASSA_PKCS1_PSS_MGF1_SHA256 *
-*** TEE_ALG_RSASSA_PKCS1_PSS_MGF1_SHA512 *
-******************************************
-** HASH **********************************
-*** TEE_ALG_MD5 **************************
-*** TEE_ALG_SHA1 *************************
-*** TEE_ALG_SHA256 ***********************
-*** TEE_ALG_SHA512 ***********************
-*****************************************/
-// #include "ta_key_storage.h"
 #include "tee_internal_api.h"
 #include "tee_logging.h"
 
 #ifdef TA_PLUGIN
 #include "tee_ta_properties.h"
-SET_TA_PROPERTIES({0x25081234,
-                   0x4132,
-                   0x5532,
-                   {'k', 'e', 'y', 's', 't', 'o', 'r', 'e'}}, /* UUID */
-                  512,                                        /* dataSize */
-                  255,                                        /* stackSize */
-                  1, /* singletonInstance */
-                  1, /* multiSession */
-                  1) /* instanceKeepAlive */
+
+SET_TA_PROPERTIES(
+    {0x3E93872E, 0xAAB0, 0x4C7E, {'K', 'E', 'Y', 'S', 'T', 'O', 'R', 'E'}}, 512,
+    255, 1, 1, 1)
 #endif
 
 // Helper function.
@@ -100,7 +65,9 @@ static TEE_Result RSA_Operation(TEE_OperationMode mode, uint32_t algorithm,
   TEE_Result ret = TEE_SUCCESS;
 
   // Allocate the cryptographic operation.
+  OT_LOG(LOG_DEBUG, "--- DEBUG LINE 68, Before operation allocation");
   ret = TEE_AllocateOperation(&rsa_operation, algorithm, mode, MAX_RSA_KEYSIZE);
+  OT_LOG(LOG_DEBUG, "--- DEBUG LINE 70, After operation allocation");
   // If operation fails, log error to the system log, free the operation and
   // return.
   if (ret != TEE_SUCCESS) {
@@ -134,8 +101,10 @@ static TEE_Result RSA_Operation(TEE_OperationMode mode, uint32_t algorithm,
   // Decryption
   case TEE_MODE_DECRYPT:
     // Decrypt the in_data with given key and put the result on out_data buffer.
+    OT_LOG(LOG_DEBUG, "--- DEBUG LINE 104, Before decryption");
     ret = TEE_AsymmetricDecrypt(rsa_operation, NULL, 0, in_data, in_data_len,
                                 out_data, &out_data_len);
+    OT_LOG(LOG_DEBUG, "--- DEBUG LINE 659, After decryption");
     // If operation fails, log error to the system log.
     if (ret != TEE_SUCCESS) {
       OT_LOG(LOG_ERR, "TEE_AsymmetricDecrypt failed: 0x%x", ret);
@@ -291,7 +260,7 @@ static TEE_Result generate_key(uint32_t key_size, uint32_t key_type,
   // accordingly.
   TEE_Result ret = TEE_SUCCESS;
 
-  // Allocate the cryptographic operation.
+  // Allocate the transient object.
   ret = TEE_AllocateTransientObject(key_type, key_size, outkey);
   // If operation fails, log error to the system log, free the operation and
   // return.
@@ -307,10 +276,10 @@ static TEE_Result generate_key(uint32_t key_size, uint32_t key_type,
   // If operation fails, log error to the system log.
   if (ret != TEE_SUCCESS) {
     OT_LOG(LOG_ERR, "TEE_GenerateKey failed: 0x%x", ret);
+    // Always free the object.
+    TEE_FreeTransientObject(*outkey);
   }
 
-  // Always free the operation.
-  TEE_FreeTransientObject(*outkey);
   // Return the result.
   return ret;
 }
@@ -387,6 +356,7 @@ static TEE_Result store_key(TEE_ObjectHandle key, uint32_t *id_found) {
 
   // Always close the object to free it.
   TEE_CloseObject(temp);
+
   // Return the result.
   return ret;
 }
@@ -404,8 +374,8 @@ static TEE_Result get_key(TEE_ObjectHandle *key, uint32_t id) {
   TEE_ObjectHandle temp_key = NULL;
 
   // Open the persistent object that corresponds to the id.
-  ret = TEE_OpenPersistentObject(TEE_STORAGE_PRIVATE, &id, sizeof(id),
-                                 TEE_DATA_FLAG_ACCESS_READ, &temp_key);
+  ret = TEE_OpenPersistentObject(TEE_STORAGE_PRIVATE, &id, sizeof(id), 0,
+                                 &temp_key);
   // If operation fails, log the error and return.
   if (ret != TEE_SUCCESS) {
     OT_LOG(LOG_ERR, "TEE_OpenPersistentObject failed: 0x%x", ret);
@@ -443,8 +413,7 @@ static TEE_Result get_key(TEE_ObjectHandle *key, uint32_t id) {
   //   OT_LOG(LOG_ERR, "TEE_CopyObjectAttributes failed: 0x%x", ret);
   // }
 
-  // Always close both objects.
-  TEE_CloseObject(*key);
+  // Always close temp object.
   TEE_CloseObject(temp_key);
   // Return the result.
   return ret;
@@ -473,7 +442,7 @@ static TEE_Result do_crypto(Operation op, Algorithm_type alg_type,
   uint32_t IV_len = 0;
 
   // Check for the parameters of the operation.
-  if (op != ENCRYPT || op != DECRYPT) {
+  if (op != ENCRYPT && op != DECRYPT) {
     // Not recognized operation.
     OT_LOG(LOG_ERR, "Bad cryptographic operation");
     // Return bad parameters.
@@ -484,7 +453,7 @@ static TEE_Result do_crypto(Operation op, Algorithm_type alg_type,
     // Null initialized variable that will hold an oject info.
     TEE_ObjectInfo info;
     // Get info from the key object.
-    // TEE_GetObjectInfo(key, &info);
+    TEE_GetObjectInfo(key, &info);
     // // If operation fails, log the error and return.
     // if (ret != TEE_SUCCESS) {
     //   OT_LOG(LOG_ERR, "TEE_GetObjectInfo failed: 0x%x", ret);
@@ -506,8 +475,10 @@ static TEE_Result do_crypto(Operation op, Algorithm_type alg_type,
   switch (alg_type) {
   case RSA:
     // Call the RSA wrapper.
+    OT_LOG(LOG_DEBUG, "--- DEBUG LINE 474, Before RSA_Operation");
     ret = RSA_Operation(mode, algorithm, key, in_data, in_data_len, out_data,
                         *out_data_len);
+    OT_LOG(LOG_DEBUG, "--- DEBUG LINE 477, After RSA_Operation");
     // If operation fails, log and return.
     if (ret != TEE_SUCCESS) {
       OT_LOG(LOG_ERR, "RSA_Operation failed: 0x%x", ret);
@@ -642,8 +613,8 @@ TEE_Result TA_EXPORT TA_InvokeCommandEntryPoint(void *sessionContext,
     return TEE_ERROR_BAD_PARAMETERS;
   }
   // Parameter Check.
-  if (TEE_PARAM_TYPE_GET(paramTypes, 0) != TEE_PARAM_TYPE_MEMREF_INOUT ||
-      TEE_PARAM_TYPE_GET(paramTypes, 1) != TEE_PARAM_TYPE_MEMREF_INOUT) {
+  if (TEE_PARAM_TYPE_GET(paramTypes, 2) != TEE_PARAM_TYPE_MEMREF_INOUT ||
+      TEE_PARAM_TYPE_GET(paramTypes, 3) != TEE_PARAM_TYPE_MEMREF_INOUT) {
     OT_LOG(LOG_ERR, "Error bad parameters, params[2] and params[3] must be: "
                     "TEE_PARAM_TYPE_MEMREF_INOUT");
     return TEE_ERROR_BAD_PARAMETERS;
@@ -655,6 +626,7 @@ TEE_Result TA_EXPORT TA_InvokeCommandEntryPoint(void *sessionContext,
 
   // Switch available commands.
   if (commandID == ENCRYPTION) {
+    OT_LOG(LOG_ERR, "String to encrypt:%s", (char *)params[2].memref.buffer);
     // Null initialized object handle to the key.
     TEE_ObjectHandle key = NULL;
     // Get the key from given id.
@@ -679,6 +651,7 @@ TEE_Result TA_EXPORT TA_InvokeCommandEntryPoint(void *sessionContext,
     // Return the result.
     return ret;
   } else if (commandID == DECRYPTION) {
+    OT_LOG(LOG_ERR, "String to decrypt:%s", (char *)params[2].memref.buffer);
     // Null initialized object handle to the key.
     TEE_ObjectHandle key = NULL;
     // Get the key from given id.
@@ -690,10 +663,12 @@ TEE_Result TA_EXPORT TA_InvokeCommandEntryPoint(void *sessionContext,
     }
 
     // Call cryptographic operation.
+    OT_LOG(LOG_ERR, "--- DEBUG LINE 659, Before do_crypto");
     ret =
         do_crypto(DECRYPT, params[0].value.b, key, params[1].value.a,
                   params[2].memref.buffer, params[2].memref.size,
                   params[3].memref.buffer, (uint32_t *)&params[3].memref.size);
+    OT_LOG(LOG_ERR, "--- DEBUG LINE 664, After do_crypto");
     // If operation fails, log the error.
     if (ret != TEE_SUCCESS || params[3].memref.size == 0) {
       OT_LOG(LOG_ERR, "Decryption operation failed");
@@ -703,6 +678,7 @@ TEE_Result TA_EXPORT TA_InvokeCommandEntryPoint(void *sessionContext,
     // Return the result.
     return ret;
   } else if (commandID == SIGNATURE) {
+    OT_LOG(LOG_DEBUG, "--- DEBUG LINE SIGNATURE");
     // Null initialized object handle to the key.
     TEE_ObjectHandle key = NULL;
     // Get the key from given id.
@@ -728,6 +704,7 @@ TEE_Result TA_EXPORT TA_InvokeCommandEntryPoint(void *sessionContext,
     // Return the result.
     return ret;
   } else if (commandID == VERIFICATION) {
+    OT_LOG(LOG_ERR, "--- DEBUG LINE VERIFICATION");
     // Null initialized object handle to the key.
     TEE_ObjectHandle key = NULL;
     // Get the key from given id.
@@ -753,6 +730,7 @@ TEE_Result TA_EXPORT TA_InvokeCommandEntryPoint(void *sessionContext,
     // Return the result.
     return ret;
   } else if (commandID == HASH) {
+    OT_LOG(LOG_ERR, "--- DEBUG LINE HASH");
     // Output buffer size.
     uint32_t out_size;
     // Call hash operation.
@@ -764,6 +742,7 @@ TEE_Result TA_EXPORT TA_InvokeCommandEntryPoint(void *sessionContext,
     }
     return ret;
   } else if (commandID == KEYGENERATION) {
+    OT_LOG(LOG_ERR, "--- DEBUG LINE KEYGENERATION");
     // Null initialized object handle to the key.
     TEE_ObjectHandle key = NULL;
     // Call key generation operation.
@@ -781,6 +760,9 @@ TEE_Result TA_EXPORT TA_InvokeCommandEntryPoint(void *sessionContext,
       OT_LOG(LOG_ERR, "Key storage operation failed");
     }
 
+    uint32_t ata, atb;
+    TEE_GetObjectValueAttribute(key, TEE_ATTR_RSA_MODULUS, &ata, &atb);
+    params[1].value.b = ata;
     // Always free the object.
     TEE_FreeTransientObject(key);
     // Return the result.

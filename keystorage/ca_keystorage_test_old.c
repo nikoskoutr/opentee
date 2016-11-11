@@ -15,7 +15,10 @@
 #define DATA_SIZE 10
 
 static const TEEC_UUID uuid = {
-    0x25081234, 0x4132, 0x5532, {'k', 'e', 'y', 's', 't', 'o', 'r', 'e'}};
+    0x25083421,
+    0xEFDC,
+    0xA014,
+    {0xAB, 0xCD, 0xEF, 0xA0, 0x31, 0x55, 0x37, 0xF0}};
 
 int main() {
   TEEC_Context context;
