@@ -760,9 +760,10 @@ TEE_Result TA_EXPORT TA_InvokeCommandEntryPoint(void *sessionContext,
       OT_LOG(LOG_ERR, "Key storage operation failed");
     }
 
-    uint32_t ata, atb;
-    TEE_GetObjectValueAttribute(key, TEE_ATTR_RSA_MODULUS, &ata, &atb);
-    params[1].value.b = ata;
+    uint32_t ata[1], atb;
+    TEE_GetObjectBufferAttribute(key, TEE_ATTR_RSA_MODULUS, ata, &atb);
+    OT_LOG(LOG_ERR, "%d", atb);
+    params[1].value.b = ata[1];
     // Always free the object.
     TEE_FreeTransientObject(key);
     // Return the result.

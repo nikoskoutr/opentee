@@ -1,0 +1,5 @@
+#/bin/bash
+
+alias d="./deb"
+alias q="qbs debug"
+alias t="./debug/ca_keystorage_test"
