@@ -13,6 +13,8 @@
 
 #define TEE_TYPE_RSA_KEYPAIR 0xA1000030
 #define TEE_ALG_RSA_NOPAD 0x60000030
+#define TEE_ALG_AES_ECB_NOPAD 0x10000010
+#define TEE_TYPE_AES 0xA0000010
 
 typedef enum { RSA = 0, AES = 1 } Algorithm_type;
 
@@ -37,7 +39,7 @@ int main() {
   operation.paramTypes = TEEC_PARAM_TYPES(TEEC_VALUE_INOUT, TEEC_VALUE_INOUT,
                                           TEEC_MEMREF_WHOLE, TEEC_MEMREF_WHOLE);
   operation.params[0].value.a = 256;
-  operation.params[0].value.b = TEE_TYPE_RSA_KEYPAIR;
+  operation.params[0].value.b = TEE_TYPE_AES;
   operation.params[1].value.a = 0;
   operation.params[1].value.b = 0;
 
@@ -107,8 +109,8 @@ int main() {
 
   printf("-- Encrypting with generated RSA key.\n");
   operation.params[0].value.a = key_id;
-  operation.params[0].value.b = RSA;
-  operation.params[1].value.a = TEE_ALG_RSA_NOPAD;
+  operation.params[0].value.b = AES;
+  operation.params[1].value.a = TEE_ALG_AES_ECB_NOPAD;
   ret = TEEC_InvokeCommand(&session, ENCRYPTION, &operation, NULL);
   if (ret != TEEC_SUCCESS) {
     printf("!! Error encrypting 0x%x\n", ret);

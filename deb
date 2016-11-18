@@ -1,7 +1,11 @@
 #!/bin/bash
 
-cp ../opentee/keystorage/ca_keystorage_test.* CAs/keystorage/
-cp ../opentee/keystorage/MakemoduleCA.am CAs/keystorage/Makemodule.am
-cp ../opentee/keystorage/ta_key_storage.* TAs/keystorage/
-cp ../opentee/keystorage/Makemodule.am TAs/keystorage/Makemodule.am
+cp ./keystorage/ca_keystorage_test.* ../Open-TEE/CAs/keystorage/
+cp ./keystorage/MakemoduleCA.am ../Open-TEE/CAs/keystorage/Makemodule.am
+cp ./keystorage/ta_key_storage.* ../Open-TEE/TAs/ta_key_storage/
+cp ./keystorage/Makemodule.am ../Open-TEE/TAs/ta_key_storage/Makemodule.am
+cd ../Open-TEE/
 qbs debug
+qbs debug
+qbs debug
+cd -
