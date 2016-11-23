@@ -1,5 +1,8 @@
 #include "tee_internal_api.h"
 #include "tee_logging.h"
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
 
 #ifdef TA_PLUGIN
 #include "tee_ta_properties.h"
@@ -37,23 +40,25 @@ typedef enum {
 typedef enum { RSA = 0, AES = 1 } Algorithm_type;
 
 /*                                                                             *
-*                                                                              *
-* Low level functions defining functions that will be used by other functions. *
-*                                                                              *
-*                                                                              *
-*                                                                              */
+ *                                                                              *
+ * Low level functions defining functions that will be used by other functions.
+ * *
+ *                                                                              *
+ *                                                                              *
+ *                                                                              */
 
 /*!
-* \brief RSA_Operation Wraps the RSA operations in one function.
-* \param mode          Supported mode are TEE_MODE_ENCRYPT and TEE_MODE_DECRYPT.
-* \param algorithm     Supported algorithms are defined above for RSA.
-* \param key           The key that will be used for the operation.
-* \param in_data       Pointer to the input data buffer.
-* \param in_data_len   Size of the input data buffer.
-* \param out_data      Pointer for the output data buffer. For the signature
-* operation it is also used for input
-* \param out_data_len  Size of the output data buffer.
-*/
+ * \brief RSA_Operation Wraps the RSA operations in one function.
+ * \param mode          Supported mode are TEE_MODE_ENCRYPT and
+ * TEE_MODE_DECRYPT.
+ * \param algorithm     Supported algorithms are defined above for RSA.
+ * \param key           The key that will be used for the operation.
+ * \param in_data       Pointer to the input data buffer.
+ * \param in_data_len   Size of the input data buffer.
+ * \param out_data      Pointer for the output data buffer. For the signature
+ * operation it is also used for input
+ * \param out_data_len  Size of the output data buffer.
+ */
 static TEE_Result RSA_Operation(TEE_OperationMode mode, uint32_t algorithm,
                                 TEE_ObjectHandle key, void *in_data,
                                 uint32_t in_data_len, void *out_data,
@@ -143,17 +148,18 @@ static TEE_Result RSA_Operation(TEE_OperationMode mode, uint32_t algorithm,
 }
 
 /*!
-* \brief AES_operation Wraps the AES operations in one function.
-* \param mode          Supported mode are TEE_MODE_ENCRYPT and TEE_MODE_DECRYPT.
-* \param algorithm     Supported algorithms are defined above for AES.
-* \param key           The key that will be used for the operation.
-* \param in_data       Pointer to the input data buffer.
-* \param in_data_len   Size of the input data buffer.
-* \param out_data      Pointer for the output data buffer. For the signature
-* operation it is also used for input
-* \param out_data_len  Pointer to memory containing the size of the output data
-* buffer.
-*/
+ * \brief AES_operation Wraps the AES operations in one function.
+ * \param mode          Supported mode are TEE_MODE_ENCRYPT and
+ * TEE_MODE_DECRYPT.
+ * \param algorithm     Supported algorithms are defined above for AES.
+ * \param key           The key that will be used for the operation.
+ * \param in_data       Pointer to the input data buffer.
+ * \param in_data_len   Size of the input data buffer.
+ * \param out_data      Pointer for the output data buffer. For the signature
+ * operation it is also used for input
+ * \param out_data_len  Pointer to memory containing the size of the output data
+ * buffer.
+ */
 static TEE_Result AES_operation(TEE_OperationMode mode, uint32_t algorithm,
                                 TEE_ObjectHandle key, void *IV, uint32_t IV_len,
                                 void *in_data, uint32_t in_data_len,
@@ -207,16 +213,16 @@ static TEE_Result AES_operation(TEE_OperationMode mode, uint32_t algorithm,
 }
 
 /*!
-* \brief digest_operation Wraps the hash operations in one function.
-* \param algorithm        Supported algorithms are defined above for hash
-* functions.
-* \param in_data          Pointer to the input data buffer.
-* \param in_data_len      Size of the input data buffer.
-* \param out_data         Pointer for the output data buffer.
-* \param out_data_len     Pointer to memory containing the size of the output
-* data
-* buffer.
-*/
+ * \brief digest_operation Wraps the hash operations in one function.
+ * \param algorithm        Supported algorithms are defined above for hash
+ * functions.
+ * \param in_data          Pointer to the input data buffer.
+ * \param in_data_len      Size of the input data buffer.
+ * \param out_data         Pointer for the output data buffer.
+ * \param out_data_len     Pointer to memory containing the size of the output
+ * data
+ * buffer.
+ */
 static TEE_Result digest_operation(uint32_t algorithm, void *in_data,
                                    uint32_t in_data_len, void *out_data,
                                    uint32_t *out_data_len) {
@@ -252,13 +258,13 @@ static TEE_Result digest_operation(uint32_t algorithm, void *in_data,
 }
 
 /*!
-* \brief generate_key  Wraps the key generation operation.
-* \param key_size      The size of the key to be generated.
-* \param key_type      Type of the key.
-* \param params        Parameters to be used with the key generation function.
-* \param param_count   Parameter count
-* \param outkey        Pointer to witch the generated key will be written.
-*/
+ * \brief generate_key  Wraps the key generation operation.
+ * \param key_size      The size of the key to be generated.
+ * \param key_type      Type of the key.
+ * \param params        Parameters to be used with the key generation function.
+ * \param param_count   Parameter count
+ * \param outkey        Pointer to witch the generated key will be written.
+ */
 static TEE_Result generate_key(uint32_t key_size, uint32_t key_type,
                                TEE_ObjectHandle *outkey) {
   // TEE_Result initialized as a success. On failure the value is changed
@@ -290,9 +296,9 @@ static TEE_Result generate_key(uint32_t key_size, uint32_t key_type,
 }
 
 /*!
-* \brief find_available_objectID  Loops through the integer IDs until an empty
-* slot is found. The objectID variable is given the resulting value.
-*/
+ * \brief find_available_objectID  Loops through the integer IDs until an empty
+ * slot is found. The objectID variable is given the resulting value.
+ */
 static uint32_t find_available_objectID() {
   // Starting at ID = 0
   uint32_t objectID = 0;
@@ -335,9 +341,9 @@ static uint32_t find_available_objectID() {
 }
 
 /*!
-* \brief store_key  Wraps the key storage operation.
-* \param key        The key to be stored.
-*/
+ * \brief store_key  Wraps the key storage operation.
+ * \param key        The key to be stored.
+ */
 static TEE_Result store_key(TEE_ObjectHandle key, uint32_t *id_found) {
   // Find available ID for the key to be stored.
   uint32_t id = find_available_objectID();
@@ -367,10 +373,10 @@ static TEE_Result store_key(TEE_ObjectHandle key, uint32_t *id_found) {
 }
 
 /*!
-* \brief get_key  Wraps the operation of getting a key.
-* \param key      Pointer to an object that the key will be stored in.
-* \param id       The id of the object that the key is stored in.
-*/
+ * \brief get_key  Wraps the operation of getting a key.
+ * \param key      Pointer to an object that the key will be stored in.
+ * \param id       The id of the object that the key is stored in.
+ */
 static TEE_Result get_key(TEE_ObjectHandle *key, uint32_t id) {
   // TEE_Result initialized as a success. On failure the value is changed
   // accordingly.
@@ -419,20 +425,20 @@ static TEE_Result get_key(TEE_ObjectHandle *key, uint32_t id) {
 }
 
 /*!
-* \brief do_crypto  Wraps the generic cryptographic operation.
-* \param op         Available options: ENCRYPT, DECRYPT.
-* \param alg_type   Available options: RSA, AES.
-* \param key        The key that will be used for the operation.
-* \algorithm        The algorithm that will be used.
-* \in_data          Pointer to the input buffer.
-* \in_data_len      The length of the input buffer.
-* \out_data         Pointer to the output buffer.
-* \out_data_len     The length of the output buffer.
-*/
+ * \brief do_crypto  Wraps the generic cryptographic operation.
+ * \param op         Available options: ENCRYPT, DECRYPT.
+ * \param alg_type   Available options: RSA, AES.
+ * \param key        The key that will be used for the operation.
+ * \algorithm        The algorithm that will be used.
+ * \in_data          Pointer to the input buffer.
+ * \in_data_len      The length of the input buffer.
+ * \out_data         Pointer to the output buffer.
+ * \out_data_len     The length of the output buffer.
+ */
 static TEE_Result do_crypto(Operation op, Algorithm_type alg_type,
                             TEE_ObjectHandle key, uint32_t algorithm,
                             void *in_data, uint32_t in_data_len, void *out_data,
-                            uint32_t *out_data_len) {
+                            uint32_t *out_data_len, uint32_t *ivlen) {
   // Null initialized mode.
   TEE_OperationMode mode;
   // Null initialized initialization vector.
@@ -453,17 +459,17 @@ static TEE_Result do_crypto(Operation op, Algorithm_type alg_type,
     TEE_ObjectInfo info;
     // Get info from the key object.
     TEE_GetObjectInfo(key, &info);
-    // // If operation fails, log the error and return.
-    // if (ret != TEE_SUCCESS) {
-    //   OT_LOG(LOG_ERR, "TEE_GetObjectInfo failed: 0x%x", ret);
-    //   return ret;
-    // }
+
     // Set the length of the initialization vector the same size as the key.
     IV_len = (uint32_t)info.objectSize;
+    *ivlen = IV_len;
     // Generate random vector with given size.
-    IV = calloc(IV_len, sizeof(uint8_t));
+    IV = malloc(IV_len);
     TEE_GenerateRandom(IV, IV_len);
   } else if (op == DECRYPT) {
+    IV = malloc(*out_data_len);
+    memcpy(IV, out_data, *out_data_len);
+    IV_len = *out_data_len;
     // Set the mode to decrypt.
     mode = TEE_MODE_DECRYPT;
   }
@@ -489,6 +495,10 @@ static TEE_Result do_crypto(Operation op, Algorithm_type alg_type,
     // Call the AES wrapper.
     ret = AES_operation(mode, algorithm, key, IV, IV_len, in_data, in_data_len,
                         out_data, out_data_len);
+    if (op == ENCRYPT) {
+      memset(in_data, 'z', in_data_len);
+      memcpy(in_data, IV, IV_len);
+    }
     free(IV);
     // If operation fails, log and return.
     if (ret != TEE_SUCCESS) {
@@ -502,19 +512,19 @@ static TEE_Result do_crypto(Operation op, Algorithm_type alg_type,
 }
 
 /*!
-* \brief do_sign          Wraps the generic signature and verification
-* operation.
-* \param op               Available options: SIGN, VERIFY.
-* \param hash_algorithm   Available algorithms are defined in the beginning of
-* the document.
-* \param sign_algorithm   Available algorithms are defined in the beginning of
-* the document.
-* \key                    The key that will be used for the operation.
-* \in_data                Pointer to the input buffer.
-* \in_data_len            The length of the input buffer.
-* \out_data               Pointer to the output buffer.
-* \out_data_len           Buffer to the length of the output buffer.
-*/
+ * \brief do_sign          Wraps the generic signature and verification
+ * operation.
+ * \param op               Available options: SIGN, VERIFY.
+ * \param hash_algorithm   Available algorithms are defined in the beginning of
+ * the document.
+ * \param sign_algorithm   Available algorithms are defined in the beginning of
+ * the document.
+ * \key                    The key that will be used for the operation.
+ * \in_data                Pointer to the input buffer.
+ * \in_data_len            The length of the input buffer.
+ * \out_data               Pointer to the output buffer.
+ * \out_data_len           Buffer to the length of the output buffer.
+ */
 static TEE_Result do_sign(Operation op, uint32_t hash_algorithm,
                           uint32_t sign_algorithm, TEE_ObjectHandle key,
                           void *in_data, uint32_t in_data_len, void *out_data,
@@ -638,14 +648,14 @@ TEE_Result TA_EXPORT TA_InvokeCommandEntryPoint(void *sessionContext,
       OT_LOG(LOG_ERR, "Get key operation failed");
       return ret;
     }
-    // Output buffer size.
-    uint32_t out_size;
+
     // Call cryptographic operation.
     ret = do_crypto(ENCRYPT, params[0].value.b, key, params[1].value.a,
                     params[2].memref.buffer, params[2].memref.size,
-                    params[3].memref.buffer, &out_size);
+                    params[3].memref.buffer, (uint32_t *)&params[3].memref.size,
+                    &params[1].value.b);
     // If operation fails, log the error.
-    if (ret != TEE_SUCCESS || out_size == 0) {
+    if (ret != TEE_SUCCESS || params[3].memref.size == 0) {
       OT_LOG(LOG_ERR, "Encryption operation failed");
     }
     // Free the transient object.
@@ -666,10 +676,10 @@ TEE_Result TA_EXPORT TA_InvokeCommandEntryPoint(void *sessionContext,
 
     // Call cryptographic operation.
     OT_LOG(LOG_ERR, "--- DEBUG LINE 659, Before do_crypto");
-    ret =
-        do_crypto(DECRYPT, params[0].value.b, key, params[1].value.a,
-                  params[2].memref.buffer, params[2].memref.size,
-                  params[3].memref.buffer, (uint32_t *)&params[3].memref.size);
+    ret = do_crypto(DECRYPT, params[0].value.b, key, params[1].value.a,
+                    params[2].memref.buffer, params[2].memref.size,
+                    params[3].memref.buffer, (uint32_t *)&params[3].memref.size,
+                    &params[1].value.b);
     OT_LOG(LOG_ERR, "--- DEBUG LINE 664, After do_crypto");
     // If operation fails, log the error.
     if (ret != TEE_SUCCESS || params[3].memref.size == 0) {
@@ -733,13 +743,13 @@ TEE_Result TA_EXPORT TA_InvokeCommandEntryPoint(void *sessionContext,
     return ret;
   } else if (commandID == HASH) {
     OT_LOG(LOG_ERR, "--- DEBUG LINE HASH");
-    // Output buffer size.
-    uint32_t out_size;
+
     // Call hash operation.
     digest_operation(params[0].value.a, params[2].memref.buffer,
-                     params[2].memref.size, params[3].memref.buffer, &out_size);
+                     params[2].memref.size, params[3].memref.buffer,
+                     (uint32_t *)&params[3].memref.size);
     // If operation fails, log the error.
-    if (ret != TEE_SUCCESS || out_size == 0) {
+    if (ret != TEE_SUCCESS || params[3].memref.size == 0) {
       OT_LOG(LOG_ERR, "Hash operation failed");
     }
     return ret;
@@ -773,10 +783,10 @@ TEE_Result TA_EXPORT TA_InvokeCommandEntryPoint(void *sessionContext,
 }
 
 /*
-*
-* Should the secret keys be encrypted?
-*
-*/
+ *
+ * Should the secret keys be encrypted?
+ *
+ */
 // static TEE_Result encrypt_private_key(TEE_ObjectHandle *encrypted_key,
 //                                       uint32_t *encrypted_key_size,
 //                                       TEE_ObjectHandle aes_encryption_key) {
