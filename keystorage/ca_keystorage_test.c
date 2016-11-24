@@ -102,24 +102,24 @@ int main() {
     operation.params[2].memref.parent = &in_mem;
     operation.params[3].memref.parent = &out_mem;
 
-    // printf("-- Invoking command: Key Generation:\n");
-    // ret = TEEC_InvokeCommand(&session, KEYGENERATION, &operation, NULL);
-    // if (ret != TEEC_SUCCESS) {
-    //   printf("!! Error generating key 0x%x\n", ret);
-    //   TEEC_CloseSession(&session);
-    //   TEEC_FinalizeContext(&context);
-    //   return 0;
-    // }
-    //
-    // uint32_t key_id = operation.params[0].value.a;
-    // printf("-- Key generation successful, the key id is: %d\n", key_id);
+    printf("-- Invoking command: Key Generation:\n");
+    ret = TEEC_InvokeCommand(&session, KEYGENERATION, &operation, NULL);
+    if (ret != TEEC_SUCCESS) {
+      printf("!! Error generating key 0x%x\n", ret);
+      TEEC_CloseSession(&session);
+      TEEC_FinalizeContext(&context);
+      return 0;
+    }
+   
+    uint32_t key_id = operation.params[0].value.a;
+    printf("-- Key generation successful, the key id is: %d\n", key_id);
 
     printf("++ Enter key to encrypt:\n");
 
     fgets(p, 256, stdin);
 
     printf("-- Encrypting with generated AES key.\n");
-    operation.params[0].value.a = 100; // id
+    operation.params[0].value.a = key_id; // id
     operation.params[0].value.b = AES;
     operation.params[1].value.a = TEE_ALG_AES_CBC_NOPAD;
     ret = TEEC_InvokeCommand(&session, ENCRYPTION, &operation, NULL);
