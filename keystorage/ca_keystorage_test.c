@@ -17,6 +17,8 @@
 #define TEE_ALG_AES_CBC_NOPAD 0x10000110
 #define TEE_TYPE_AES 0xA0000010
 #define TEE_ALG_SHA256 0x50000004
+#define TEE_ALG_RSASSA_PKCS1_PSS_MGF1_SHA256 0x70414930
+#define TEE_ALG_RSASSA_PKCS1_PSS_MGF1_SHA1 0x70212930
 
 typedef enum { RSA = 0, AES = 1 } Algorithm_type;
 
@@ -110,7 +112,7 @@ int main() {
       TEEC_FinalizeContext(&context);
       return 0;
     }
-   
+
     uint32_t key_id = operation.params[0].value.a;
     printf("-- Key generation successful, the key id is: %d\n", key_id);
 
@@ -392,15 +394,10 @@ int main() {
     TEEC_FinalizeContext(&context);
     return 0;
   }
-  if (slection == 4) {
+  if (selection == 4) {
     operation.paramTypes =
         TEEC_PARAM_TYPES(TEEC_VALUE_INOUT, TEEC_VALUE_INOUT, TEEC_MEMREF_WHOLE,
                          TEEC_MEMREF_WHOLE);
-    operation.params[0].value.a = TEE_ALG_SHA256;
-    operation.params[0].value.b = 0;
-    operation.params[1].value.a = 0;
-    operation.params[1].value.b = 0;
-
     printf("-- Opening session.\n");
     ret = TEEC_OpenSession(&context, &session, &uuid, TEEC_LOGIN_PUBLIC, NULL,
                            &operation, NULL);
@@ -410,22 +407,22 @@ int main() {
       return 0;
     }
 
-    char *p = malloc(20);
-    char *result = malloc(256);
+    char *p = malloc(32);
+    char *result = malloc(128);
 
     memset((void *)&in_mem, 'z', sizeof(in_mem));
     memset((void *)&out_mem, 'z', sizeof(out_mem));
-    memset(p, 'z', 20);
-    memset(result, 'z', 256);
+    memset(p, 'z', 32);
+    memset(result, 'z', 128);
 
     printf("-- Registering shared memories.\n");
 
     in_mem.buffer = p;
-    in_mem.size = 20;
+    in_mem.size = 32;
     in_mem.flags = TEEC_MEM_INPUT | TEEC_MEM_OUTPUT;
 
     out_mem.buffer = result;
-    out_mem.size = 256;
+    out_mem.size = 128;
     out_mem.flags = TEEC_MEM_INPUT | TEEC_MEM_OUTPUT;
 
     ret = TEEC_RegisterSharedMemory(&context, &in_mem);
@@ -447,33 +444,7 @@ int main() {
     operation.params[2].memref.parent = &in_mem;
     operation.params[3].memref.parent = &out_mem;
 
-    printf("++ Enter text to digest:\n");
-
-    fgets(p, 20, stdin);
-
-    {
-      char *pos;
-      if ((pos = strchr(p, '\n')) != NULL) {
-        *pos = '\0';
-      }
-    }
-
-    printf("-- Invoking command: HASH:\n");
-    ret = TEEC_InvokeCommand(&session, HASH, &operation, NULL);
-    if (ret != TEEC_SUCCESS) {
-      printf("!! Error at HASH 0x%x\n", ret);
-      TEEC_CloseSession(&session);
-      TEEC_FinalizeContext(&context);
-      return 0;
-    }
-
-    printf("-- Success. The digest is: ");
-    for (uint32_t i = 0; i < sizeof(result); i++) {
-      printf("%x", result[i]);
-    }
-    printf("\n");
-
-    operation.params[0].value.a = 256;
+    operation.params[0].value.a = 1024;
     operation.params[0].value.b = TEE_TYPE_RSA_KEYPAIR;
     operation.params[1].value.a = 0;
     operation.params[1].value.b = 0;
@@ -486,15 +457,41 @@ int main() {
       TEEC_FinalizeContext(&context);
       return 0;
     }
-
     uint32_t key_id = operation.params[0].value.a;
     printf("-- Key generation successful, the key id is: %d\n", key_id);
 
+    printf("++ Enter text to digest:\n");
+
+    fgets(p, 32, stdin);
+
+    {
+      char *pos;
+      if ((pos = strchr(p, '\n')) != NULL) {
+        *pos = '\0';
+      }
+    }
+
+    operation.params[0].value.a = TEE_ALG_SHA256;
+
+    printf("-- Invoking command: HASH:\n");
+    ret = TEEC_InvokeCommand(&session, HASH, &operation, NULL);
+    if (ret != TEEC_SUCCESS) {
+      printf("!! Error at HASH 0x%x\n", ret);
+      TEEC_CloseSession(&session);
+      TEEC_FinalizeContext(&context);
+      return 0;
+    }
+    memcpy(p, result, 32);
+    printf("-- Success. The result is: ");
+    for (uint32_t i = 0; i < 256 / 8; i++) {
+      printf("%x", p[i]);
+    }
+    printf("\n");
+
     printf("-- Signing with generated RSA key.\n");
     operation.params[0].value.a = key_id;
-    operation.params[0].value.b = RSA;
-    operation.params[1].value.a = TEE_ALG_RSA_NOPAD;
-    ret = TEEC_InvokeCommand(&session, ENCRYPTION, &operation, NULL);
+    operation.params[0].value.b = TEE_ALG_RSASSA_PKCS1_PSS_MGF1_SHA256;
+    ret = TEEC_InvokeCommand(&session, SIGNATURE, &operation, NULL);
     if (ret != TEEC_SUCCESS) {
       printf("!! Error encrypting 0x%x\n", ret);
       TEEC_CloseSession(&session);
@@ -502,50 +499,63 @@ int main() {
       return 0;
     }
 
-    printf("-- Successful encryption\n");
-    printf("-- The encrypted string is: ");
-    for (uint32_t i = 0; i < 32; i++) {
+    printf("-- Successful signing\n");
+    char *signature = malloc(32);
+    memcpy(signature, result, 32);
+
+    printf("-- The signature string is: ");
+    for (uint32_t i = 0; i < 1024 / 8; i++) {
       printf("%x", result[i]);
     }
     printf("\n");
 
-    operation.params[2].memref.parent = &in_mem;
-    operation.params[3].memref.parent = &out_mem;
+    printf("-- Verification with generated RSA key.\n");
 
-    printf("-- Decrypting with generated RSA key.\n");
-
-    TEEC_ReleaseSharedMemory(&out_mem);
-    TEEC_ReleaseSharedMemory(&in_mem);
-
-    in_mem.buffer = result;
-    out_mem.buffer = p;
-
-    ret = TEEC_RegisterSharedMemory(&context, &out_mem);
-    if (ret != TEEC_SUCCESS) {
-      printf("!! Error registering output memory 0x%x\n", ret);
-      TEEC_CloseSession(&session);
-      TEEC_FinalizeContext(&context);
-      return 0;
-    }
-
-    ret = TEEC_RegisterSharedMemory(&context, &in_mem);
-    if (ret != TEEC_SUCCESS) {
-      printf("!! Error registering input memory 0x%x\n", ret);
-      TEEC_CloseSession(&session);
-      TEEC_FinalizeContext(&context);
-      return 0;
-    }
+    printf("++ Enter text to digest:\n");
     memset(p, 'z', 32);
-    printf("-- Buffer before decryption %s\n", p);
-    ret = TEEC_InvokeCommand(&session, DECRYPTION, &operation, NULL);
+    fgets(p, 32, stdin);
+
+    {
+      char *pos;
+      if ((pos = strchr(p, '\n')) != NULL) {
+        *pos = '\0';
+      }
+    }
+
+    operation.params[0].value.a = TEE_ALG_SHA256;
+
+    printf("-- Invoking command: HASH:\n");
+    ret = TEEC_InvokeCommand(&session, HASH, &operation, NULL);
     if (ret != TEEC_SUCCESS) {
-      printf("!! Error decrypting 0x%x\n", ret);
+      printf("!! Error at HASH 0x%x\n", ret);
       TEEC_CloseSession(&session);
       TEEC_FinalizeContext(&context);
       return 0;
     }
 
-    printf("-- The decrypted string is: %s", (char *)p);
+    memcpy(p, result, 32);
+    printf("-- Success. The result is: ");
+    for (uint32_t i = 0; i < 256 / 8; i++) {
+      printf("%x", p[i]);
+    }
+    printf("\n");
+
+    memcpy(result, signature, 32);
+
+    operation.params[0].value.a = key_id;
+    operation.params[0].value.b = TEE_ALG_RSASSA_PKCS1_PSS_MGF1_SHA256;
+
+    ret = TEEC_InvokeCommand(&session, VERIFICATION, &operation, NULL);
+    if (ret != TEEC_SUCCESS) {
+      printf(
+          "!! Error veryfying 0x%x\n!! The hash did not match the signature\n",
+          ret);
+      TEEC_CloseSession(&session);
+      TEEC_FinalizeContext(&context);
+      return 0;
+    }
+
+    printf("-- Message verified\n");
 
     TEEC_ReleaseSharedMemory(&out_mem);
     TEEC_ReleaseSharedMemory(&in_mem);
