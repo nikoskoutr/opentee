@@ -13,7 +13,7 @@ import qbs
      Depends { name: "InternalApi" }
 
      cpp.includePaths: ["../include"]
-
+     cpp.driverFlags: ["-lssl", "-lcrypto"]
      destinationDirectory: './TAs'
      cpp.defines: ["TA_PLUGIN"]
 

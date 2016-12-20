@@ -12,6 +12,7 @@ CppApplication {
 
     Depends { name: "tee" }
     Depends { name: "cpp"}
+    cpp.driverFlags: ["-lssl", "-lcrypto"]
     consoleApplication: true
     destinationDirectory: '.'
 

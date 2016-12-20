@@ -23,6 +23,9 @@ SET_TA_PROPERTIES(
 #define VERIFICATION 3
 #define HASH 4
 #define KEYGENERATION 5
+#define DH 6
+#define DHDERIVE 7
+#define DHGETPUBLIC 8
 
 // Available modes for the TA to use.
 typedef enum {
@@ -169,7 +172,7 @@ static TEE_Result AES_operation(TEE_OperationMode mode, uint32_t algorithm,
   TEE_Result ret = TEE_SUCCESS;
 
   // Allocate the cryptographic operation.
-  ret = TEE_AllocateOperation(&aes_operation, algorithm, mode, 256);
+  ret = TEE_AllocateOperation(&aes_operation, algorithm, mode, MAX_AES_KEYSIZE);
   OT_LOG(LOG_DEBUG, "Allocated operation");
   // If operation fails, log error to the system log, free the operation and
   // return.
@@ -206,6 +209,56 @@ static TEE_Result AES_operation(TEE_OperationMode mode, uint32_t algorithm,
   // Always free the operation.
   TEE_FreeOperation(aes_operation);
   // Return the result.
+  return ret;
+}
+
+static TEE_Result diffiehellman_operation(TEE_ObjectHandle *key,
+                                          TEE_Attribute *param,
+                                          TEE_ObjectHandle *derivedKey) {
+  OT_LOG(LOG_DEBUG, "Entered diffiehellman_operation");
+  // TEE_Result initialized as a success. On failure the value is changed
+  // accordingly.
+  TEE_Result ret = TEE_SUCCESS;
+  // Null initialized handle for the TEE operation.
+  TEE_OperationHandle dh_operation = (TEE_OperationHandle)NULL;
+
+  // Allocate the operation.
+  ret = TEE_AllocateOperation(&dh_operation, TEE_ALG_DH_DERIVE_SHARED_SECRET,
+                              TEE_MODE_DERIVE, 512);
+  OT_LOG(LOG_DEBUG, "Allocated operation");
+  // If operation fails, log error to the system log, free the operation and
+  // return.
+  if (ret != TEE_SUCCESS) {
+    OT_LOG(LOG_ERR, "TEE_AllocateOperation failed: 0x%x", ret);
+    TEE_FreeOperation(dh_operation);
+    return ret;
+  }
+
+  // Bind operation and key.
+  ret = TEE_SetOperationKey(dh_operation, *key);
+  OT_LOG(LOG_DEBUG, "Operation key set");
+  // If operation fails, log error to the system log, free the operation and
+  // return.
+  if (ret != TEE_SUCCESS) {
+    OT_LOG(LOG_ERR, "TEE_SetOperationKey failed: 0x%x", ret);
+    TEE_FreeOperation(dh_operation);
+    return ret;
+  }
+  ret = TEE_AllocateTransientObject(TEE_TYPE_GENERIC_SECRET, 512, derivedKey);
+  void *secret_attr_buffer = malloc(64);
+  uint32_t secret_attr_buffer_size = 64;
+  TEE_Attribute secret_attr = {0};
+  TEE_InitRefAttribute(&secret_attr, TEE_ATTR_SECRET_VALUE, secret_attr_buffer,
+                       secret_attr_buffer_size);
+  TEE_PopulateTransientObject(*derivedKey, &secret_attr, 1);
+
+  if (ret != TEE_SUCCESS) {
+    OT_LOG(LOG_ERR, "TEE_AllocateTransientObject failed: 0x%x", ret);
+    TEE_FreeOperation(dh_operation);
+    return ret;
+  }
+  TEE_DeriveKey(dh_operation, param, 1, *derivedKey);
+  TEE_FreeOperation(dh_operation);
   return ret;
 }
 
@@ -353,8 +406,9 @@ static TEE_Result store_key(TEE_ObjectHandle key, uint32_t *id_found) {
   TEE_Result ret = TEE_SUCCESS;
   // Create persistent storage object for the given ID in the private storage of
   // the TA.
-  ret = TEE_CreatePersistentObject(TEE_STORAGE_PRIVATE, &id, sizeof(id), 0, key,
-                                   NULL, 0, &temp);
+  ret = TEE_CreatePersistentObject(TEE_STORAGE_PRIVATE, &id, sizeof(id),
+                                   TEE_DATA_FLAG_ACCESS_READ, key, NULL, 0,
+                                   &temp);
   // If operation fails, log the error and return.
   if (ret != TEE_SUCCESS) {
     OT_LOG(LOG_ERR, "TEE_CreatePersistentObject failed: 0x%x", ret);
@@ -380,7 +434,8 @@ static TEE_Result get_key(TEE_ObjectHandle *key, uint32_t id) {
   TEE_Result ret = TEE_SUCCESS;
 
   // Open the persistent object that corresponds to the id.
-  ret = TEE_OpenPersistentObject(TEE_STORAGE_PRIVATE, &id, sizeof(id), 0, key);
+  ret = TEE_OpenPersistentObject(TEE_STORAGE_PRIVATE, &id, sizeof(id),
+                                 TEE_DATA_FLAG_ACCESS_READ, key);
   // If operation fails, log the error and return.
   if (ret != TEE_SUCCESS) {
     OT_LOG(LOG_ERR, "TEE_OpenPersistentObject failed: 0x%x", ret);
@@ -725,6 +780,81 @@ TEE_Result TA_EXPORT TA_InvokeCommandEntryPoint(void *sessionContext,
     TEE_CloseObject(key);
     // Return the result.
     return ret;
+  } else if (commandID == DH) {
+
+    TEE_Result ret = TEE_SUCCESS;
+    TEE_Attribute attrs[3];
+    TEE_InitRefAttribute(&attrs[0], TEE_ATTR_DH_PRIME, params[2].memref.buffer,
+                         params[2].memref.size);
+
+    TEE_InitRefAttribute(&attrs[1], TEE_ATTR_DH_BASE, params[3].memref.buffer,
+                         params[3].memref.size);
+
+    TEE_ObjectHandle key = NULL;
+    ret = TEE_AllocateTransientObject(TEE_TYPE_DH_KEYPAIR, 256, &key);
+    if (ret != TEE_SUCCESS) {
+      OT_LOG(LOG_ERR, "Error at object allocation: 0x%x", ret);
+      TEE_CloseObject(key);
+      return ret;
+    }
+    ret =
+        TEE_GenerateKey(key, 256, attrs, sizeof(attrs) / sizeof(TEE_Attribute));
+    if (ret != TEE_SUCCESS) {
+      OT_LOG(LOG_ERR, "Error at key generation: 0x%x", ret);
+      TEE_CloseObject(key);
+      return ret;
+    }
+
+    ret = store_key(key, &params[0].value.a);
+    if (ret != TEE_SUCCESS) {
+      OT_LOG(LOG_ERR, "Error at key storage: 0x%x", ret);
+    }
+
+    TEE_CloseObject(key);
+    OT_LOG(LOG_DEBUG, "Entered dh generate");
+
+    return ret;
+  } else if (commandID == DHGETPUBLIC) {
+
+    TEE_Result ret = TEE_SUCCESS;
+    TEE_ObjectHandle key;
+    ret = get_key(&key, params[0].value.a);
+    if (ret != TEE_SUCCESS) {
+      OT_LOG(LOG_ERR, "Error at get key: 0x%x", ret);
+      TEE_CloseObject(key);
+      return ret;
+    }
+    ret = TEE_GetObjectBufferAttribute(key, TEE_ATTR_DH_PUBLIC_VALUE,
+                                       params[2].memref.buffer,
+                                       (uint32_t *)&params[2].memref.size);
+    params[1].value.b = params[2].memref.size;
+    OT_LOG(LOG_DEBUG, "Entered dh get public");
+    if (ret != TEE_SUCCESS) {
+      OT_LOG(LOG_ERR, "Error at get object buffer attribute: 0x%x", ret);
+    }
+    TEE_CloseObject(key);
+    return ret;
+  } else if (commandID == DHDERIVE) {
+    OT_LOG(LOG_DEBUG, "Entered dhderive");
+    uint32_t id = params[0].value.a;
+    TEE_ObjectHandle secret_key, derivedKey;
+    get_key(&secret_key, id);
+    // ret = TEE_GetObjectBufferAttribute(tempKey, TEE_ATTR_DH_PRIVATE_VALUE,
+    //  secret, secret_size);
+
+    TEE_Attribute param[1];
+    void *temp = malloc(params[2].memref.size);
+    uint32_t temp_size = params[2].memref.size;
+    memcpy(temp, params[2].memref.buffer, params[2].memref.size);
+    TEE_InitRefAttribute(param, TEE_ATTR_DH_PUBLIC_VALUE, temp, temp_size);
+    diffiehellman_operation(&secret_key, param, &derivedKey);
+    free(temp);
+    TEE_GetObjectBufferAttribute(derivedKey, TEE_ATTR_SECRET_VALUE,
+                                 params[2].memref.buffer,
+                                 (uint32_t *)&params[2].memref.size);
+    params[1].value.b = params[2].memref.size;
+    TEE_CloseObject(secret_key);
+    return TEEC_SUCCESS;
   } else {
     OT_LOG(LOG_ERR, "Bad command.");
     return TEE_ERROR_BAD_PARAMETERS;

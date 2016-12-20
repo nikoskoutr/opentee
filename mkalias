@@ -3,3 +3,6 @@
 alias d="./deb"
 alias t="../Open-TEE/debug/ca_keystorage_test"
 alias os="opentee start"
+alias or="opentee restart"
+alias oi="evince GPD_TEE_Internal_Core_API_Specification_v1.1.1_20160614.pdf &"
+alias oc="evince TEE_Client_API_Specification-V1.0_c.pdf &"
