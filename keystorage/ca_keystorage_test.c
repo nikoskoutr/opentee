@@ -126,6 +126,12 @@ int main() {
     printf("++ Enter key to encrypt:\n");
 
     fgets(p, 256, stdin);
+    {
+      char *pos;
+      if ((pos = strchr(p, '\n')) != NULL) {
+        *pos = '\0';
+      }
+    }
 
     printf("-- Encrypting with generated AES key.\n");
     operation.params[0].value.a = key_id; // id
@@ -140,6 +146,7 @@ int main() {
     }
 
     printf("-- Successful encryption\n");
+
     printf("-- Decrypting with generated AES key.\n");
 
     char *temp = malloc(256);
@@ -150,13 +157,12 @@ int main() {
 
     printf("-- The encrypted string is: ");
 
-    for (uint32_t i = 0; i < 256; i++) {
+    for (uint32_t i = 0; i < in_mem.size; i++) {
       printf("%x", p[i]);
     }
     printf("\n");
-
     printf("-- The IV is: ");
-    for (uint32_t i = 0; i < 56; i++) {
+    for (uint32_t i = 0; i < operation.params[1].value.b; i++) {
       printf("%x", result[i]);
     }
     printf("\n");
@@ -181,7 +187,7 @@ int main() {
     operation.paramTypes =
         TEEC_PARAM_TYPES(TEEC_VALUE_INOUT, TEEC_VALUE_INOUT, TEEC_MEMREF_WHOLE,
                          TEEC_MEMREF_WHOLE);
-    operation.params[0].value.a = 256;
+    operation.params[0].value.a = 1024;
     operation.params[0].value.b = TEE_TYPE_RSA_KEYPAIR;
     operation.params[1].value.a = 0;
     operation.params[1].value.b = 0;
@@ -195,22 +201,22 @@ int main() {
       return 0;
     }
 
-    char *p = malloc(32);
-    char *result = malloc(100);
+    char *p = malloc(128);
+    char *result = malloc(128);
 
     memset((void *)&in_mem, 'z', sizeof(in_mem));
     memset((void *)&out_mem, 'z', sizeof(out_mem));
-    memset(p, 'z', 32);
-    memset(result, 'z', 100);
+    memset(p, 'z', 128);
+    memset(result, 'z', 128);
 
     printf("-- Registering shared memories.\n");
 
     in_mem.buffer = p;
-    in_mem.size = 32;
+    in_mem.size = 128;
     in_mem.flags = TEEC_MEM_INPUT | TEEC_MEM_OUTPUT;
 
     out_mem.buffer = result;
-    out_mem.size = 100;
+    out_mem.size = 128;
     out_mem.flags = TEEC_MEM_INPUT | TEEC_MEM_OUTPUT;
 
     ret = TEEC_RegisterSharedMemory(&context, &in_mem);
@@ -246,7 +252,7 @@ int main() {
 
     printf("++ Enter key to encrypt:\n");
 
-    fgets(p, 20, stdin);
+    fgets(p, 256, stdin);
 
     printf("-- Encrypting with generated RSA key.\n");
     operation.params[0].value.a = key_id;
@@ -262,39 +268,36 @@ int main() {
 
     printf("-- Successful encryption\n");
     printf("-- The encrypted string is: ");
-    for (uint32_t i = 0; i < 32; i++) {
+    for (uint32_t i = 0; i < in_mem.size; i++) {
       printf("%x", result[i]);
     }
     printf("\n");
 
-    operation.params[2].memref.parent = &in_mem;
-    operation.params[3].memref.parent = &out_mem;
-
     printf("-- Decrypting with generated RSA key.\n");
 
-    TEEC_ReleaseSharedMemory(&out_mem);
-    TEEC_ReleaseSharedMemory(&in_mem);
+    // TEEC_ReleaseSharedMemory(&out_mem);
+    // TEEC_ReleaseSharedMemory(&in_mem);
+    //
+    // in_mem.buffer = result;
+    // out_mem.buffer = p;
+    //
+    // ret = TEEC_RegisterSharedMemory(&context, &out_mem);
+    // if (ret != TEEC_SUCCESS) {
+    //   printf("!! Error registering output memory 0x%x\n", ret);
+    //   TEEC_CloseSession(&session);
+    //   TEEC_FinalizeContext(&context);
+    //   return 0;
+    // }
+    //
+    // ret = TEEC_RegisterSharedMemory(&context, &in_mem);
+    // if (ret != TEEC_SUCCESS) {
+    //   printf("!! Error registering input memory 0x%x\n", ret);
+    //   TEEC_CloseSession(&session);
+    //   TEEC_FinalizeContext(&context);
+    //   return 0;
+    // }
 
-    in_mem.buffer = result;
-    out_mem.buffer = p;
-
-    ret = TEEC_RegisterSharedMemory(&context, &out_mem);
-    if (ret != TEEC_SUCCESS) {
-      printf("!! Error registering output memory 0x%x\n", ret);
-      TEEC_CloseSession(&session);
-      TEEC_FinalizeContext(&context);
-      return 0;
-    }
-
-    ret = TEEC_RegisterSharedMemory(&context, &in_mem);
-    if (ret != TEEC_SUCCESS) {
-      printf("!! Error registering input memory 0x%x\n", ret);
-      TEEC_CloseSession(&session);
-      TEEC_FinalizeContext(&context);
-      return 0;
-    }
-    memset(p, 'z', 32);
-    printf("-- Buffer before decryption %s\n", p);
+    memcpy(p, result, 128);
     ret = TEEC_InvokeCommand(&session, DECRYPTION, &operation, NULL);
     if (ret != TEEC_SUCCESS) {
       printf("!! Error decrypting 0x%x\n", ret);
@@ -303,7 +306,7 @@ int main() {
       return 0;
     }
 
-    printf("-- The decrypted string is: %s", (char *)p);
+    printf("-- The decrypted string is: %s", (char *)result);
 
     printf("-- Test operation ended successfuly\n");
     TEEC_CloseSession(&session);
@@ -328,18 +331,18 @@ int main() {
       return 0;
     }
 
-    char *p = malloc(20);
+    char *p = malloc(256);
     char *result = malloc(256);
 
     memset((void *)&in_mem, 'z', sizeof(in_mem));
     memset((void *)&out_mem, 'z', sizeof(out_mem));
-    memset(p, 'z', 20);
+    memset(p, 'z', 256);
     memset(result, 'z', 256);
 
     printf("-- Registering shared memories.\n");
 
     in_mem.buffer = p;
-    in_mem.size = 20;
+    in_mem.size = 256;
     in_mem.flags = TEEC_MEM_INPUT | TEEC_MEM_OUTPUT;
 
     out_mem.buffer = result;
@@ -367,7 +370,7 @@ int main() {
 
     printf("++ Enter text to digest:\n");
 
-    fgets(p, 20, stdin);
+    fgets(p, 256, stdin);
 
     {
       char *pos;
@@ -386,7 +389,8 @@ int main() {
     }
 
     printf("-- Success. The result is: ");
-    for (uint32_t i = 0; i < sizeof(result); i++) {
+    printf("%d\n", operation.params[0].value.b);
+    for (uint32_t i = 0; i < operation.params[0].value.b; i++) {
       printf("%x", result[i]);
     }
     printf("\n");
@@ -600,11 +604,8 @@ int main() {
       return 0;
     }
 
-    memset((void *)&in_mem, 'z', sizeof(in_mem));
-    memset((void *)&out_mem, 'z', sizeof(out_mem));
-    uint32_t mem_size = 64;
-    char *buffer1 = malloc(mem_size);
-    char *buffer2 = malloc(mem_size);
+    char *buffer1 = malloc(sizeof(dh512_p));
+    char *buffer2 = malloc(sizeof(dh512_g));
     memcpy(buffer1, dh512_p, sizeof(dh512_p));
     memcpy(buffer2, dh512_g, sizeof(dh512_g));
 
@@ -651,8 +652,8 @@ int main() {
     uint32_t id2 = operation.params[0].value.a;
     printf("-- Key 2 id: %d\n", id2);
 
-    in_mem.size = mem_size;
-    out_mem.size = mem_size;
+    in_mem.size = 128;
+    out_mem.size = 128;
     ret = TEEC_RegisterSharedMemory(&context, &in_mem);
     if (ret != TEEC_SUCCESS) {
       printf("!! Error registering input memory 0x%x\n", ret);
@@ -668,8 +669,7 @@ int main() {
       TEEC_FinalizeContext(&context);
       return 0;
     }
-    memset(buffer1, 'z', mem_size);
-    printf("-\n");
+
     printf("-- Getting public DH keys\n");
     operation.params[0].value.a = id1;
     ret = TEEC_InvokeCommand(&session, DHGETPUBLIC, &operation, NULL);
@@ -700,22 +700,6 @@ int main() {
     printf("\n");
 
     printf("-- Deriving private DH keys\n");
-    in_mem.size = public1_size;
-    ret = TEEC_RegisterSharedMemory(&context, &in_mem);
-    if (ret != TEEC_SUCCESS) {
-      printf("!! Error registering input memory 0x%x\n", ret);
-      TEEC_CloseSession(&session);
-      TEEC_FinalizeContext(&context);
-      return 0;
-    }
-
-    operation.params[0].value.a = id1;
-    memcpy(buffer1, public2, public1_size);
-    ret = TEEC_InvokeCommand(&session, DHDERIVE, &operation, NULL);
-    uint32_t secret1_size = operation.params[1].value.b;
-    char *secret1 = malloc(secret1_size);
-    memcpy(secret1, buffer1, secret1_size);
-
     in_mem.size = public2_size;
     ret = TEEC_RegisterSharedMemory(&context, &in_mem);
     if (ret != TEEC_SUCCESS) {
@@ -725,8 +709,24 @@ int main() {
       return 0;
     }
 
+    operation.params[0].value.a = id1;
+    memcpy(buffer1, public2, public2_size);
+    ret = TEEC_InvokeCommand(&session, DHDERIVE, &operation, NULL);
+    uint32_t secret1_size = operation.params[1].value.b;
+    char *secret1 = malloc(secret1_size);
+    memcpy(secret1, buffer1, secret1_size);
+
+    in_mem.size = public1_size;
+    ret = TEEC_RegisterSharedMemory(&context, &in_mem);
+    if (ret != TEEC_SUCCESS) {
+      printf("!! Error registering input memory 0x%x\n", ret);
+      TEEC_CloseSession(&session);
+      TEEC_FinalizeContext(&context);
+      return 0;
+    }
+
     operation.params[0].value.a = id2;
-    memcpy(buffer1, public1, mem_size);
+    memcpy(buffer1, public1, public1_size);
 
     ret = TEEC_InvokeCommand(&session, DHDERIVE, &operation, NULL);
     uint32_t secret2_size = operation.params[1].value.b;

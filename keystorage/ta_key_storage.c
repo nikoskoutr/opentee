@@ -198,8 +198,10 @@ static TEE_Result AES_operation(TEE_OperationMode mode, uint32_t algorithm,
   OT_LOG(LOG_DEBUG, "Cipher initialized");
   // Complete the cipher with one operation. If bigger data encryption is
   // required, will implement pipeline structure.
+
   ret = TEE_CipherDoFinal(aes_operation, in_data, in_data_len, out_data,
                           out_data_len);
+
   OT_LOG(LOG_DEBUG, "Cipher done");
   // If operation fails, log error to the system log.
   if (ret != TEE_SUCCESS) {
@@ -212,6 +214,12 @@ static TEE_Result AES_operation(TEE_OperationMode mode, uint32_t algorithm,
   return ret;
 }
 
+/*!
+ * \brief diffiehellman_operation Wraps the D-H operatio in one function.
+ * \param key                     The secret key.
+ * \param param                   The public key of the other party.
+ * \param derivedKey              The final derived key.
+ */
 static TEE_Result diffiehellman_operation(TEE_ObjectHandle *key,
                                           TEE_Attribute *param,
                                           TEE_ObjectHandle *derivedKey) {
@@ -224,7 +232,7 @@ static TEE_Result diffiehellman_operation(TEE_ObjectHandle *key,
 
   // Allocate the operation.
   ret = TEE_AllocateOperation(&dh_operation, TEE_ALG_DH_DERIVE_SHARED_SECRET,
-                              TEE_MODE_DERIVE, 512);
+                              TEE_MODE_DERIVE, 2048);
   OT_LOG(LOG_DEBUG, "Allocated operation");
   // If operation fails, log error to the system log, free the operation and
   // return.
@@ -244,13 +252,14 @@ static TEE_Result diffiehellman_operation(TEE_ObjectHandle *key,
     TEE_FreeOperation(dh_operation);
     return ret;
   }
-  ret = TEE_AllocateTransientObject(TEE_TYPE_GENERIC_SECRET, 512, derivedKey);
-  void *secret_attr_buffer = malloc(64);
-  uint32_t secret_attr_buffer_size = 64;
+  ret = TEE_AllocateTransientObject(TEE_TYPE_GENERIC_SECRET, 2048, derivedKey);
+  void *secret_attr_buffer = malloc(2048);
+  uint32_t secret_attr_buffer_size = 2048;
   TEE_Attribute secret_attr = {0};
   TEE_InitRefAttribute(&secret_attr, TEE_ATTR_SECRET_VALUE, secret_attr_buffer,
                        secret_attr_buffer_size);
   TEE_PopulateTransientObject(*derivedKey, &secret_attr, 1);
+  free(secret_attr_buffer);
 
   if (ret != TEE_SUCCESS) {
     OT_LOG(LOG_ERR, "TEE_AllocateTransientObject failed: 0x%x", ret);
@@ -656,7 +665,7 @@ TEE_Result TA_EXPORT TA_InvokeCommandEntryPoint(void *sessionContext,
     // Call cryptographic operation.
     ret = do_crypto(ENCRYPT, params[0].value.b, key, params[1].value.a,
                     params[2].memref.buffer, params[2].memref.size,
-                    params[3].memref.buffer, (uint32_t *)&params[3].memref.size,
+                    params[3].memref.buffer, &params[3].memref.size,
                     &params[1].value.b);
     // If operation fails, log the error.
     if (ret != TEE_SUCCESS || params[3].memref.size == 0) {
@@ -749,9 +758,11 @@ TEE_Result TA_EXPORT TA_InvokeCommandEntryPoint(void *sessionContext,
     OT_LOG(LOG_ERR, "--- DEBUG LINE HASH");
 
     // Call hash operation.
-    digest_operation(params[0].value.a, params[2].memref.buffer,
+    uint32_t output_size = (uint32_t)params[3].memref.size;
+    digest_operation((uint32_t)params[0].value.a, params[2].memref.buffer,
                      params[2].memref.size, params[3].memref.buffer,
-                     (uint32_t *)&params[3].memref.size);
+                     &output_size);
+    params[0].value.b = output_size;
     // If operation fails, log the error.
     if (ret != TEE_SUCCESS || params[3].memref.size == 0) {
       OT_LOG(LOG_ERR, "Hash operation failed");
@@ -791,14 +802,14 @@ TEE_Result TA_EXPORT TA_InvokeCommandEntryPoint(void *sessionContext,
                          params[3].memref.size);
 
     TEE_ObjectHandle key = NULL;
-    ret = TEE_AllocateTransientObject(TEE_TYPE_DH_KEYPAIR, 256, &key);
+    ret = TEE_AllocateTransientObject(TEE_TYPE_DH_KEYPAIR, 2048, &key);
     if (ret != TEE_SUCCESS) {
       OT_LOG(LOG_ERR, "Error at object allocation: 0x%x", ret);
       TEE_CloseObject(key);
       return ret;
     }
-    ret =
-        TEE_GenerateKey(key, 256, attrs, sizeof(attrs) / sizeof(TEE_Attribute));
+    ret = TEE_GenerateKey(key, 2048, attrs,
+                          sizeof(attrs) / sizeof(TEE_Attribute));
     if (ret != TEE_SUCCESS) {
       OT_LOG(LOG_ERR, "Error at key generation: 0x%x", ret);
       TEE_CloseObject(key);
@@ -839,9 +850,6 @@ TEE_Result TA_EXPORT TA_InvokeCommandEntryPoint(void *sessionContext,
     uint32_t id = params[0].value.a;
     TEE_ObjectHandle secret_key, derivedKey;
     get_key(&secret_key, id);
-    // ret = TEE_GetObjectBufferAttribute(tempKey, TEE_ATTR_DH_PRIVATE_VALUE,
-    //  secret, secret_size);
-
     TEE_Attribute param[1];
     void *temp = malloc(params[2].memref.size);
     uint32_t temp_size = params[2].memref.size;
@@ -854,6 +862,7 @@ TEE_Result TA_EXPORT TA_InvokeCommandEntryPoint(void *sessionContext,
                                  (uint32_t *)&params[2].memref.size);
     params[1].value.b = params[2].memref.size;
     TEE_CloseObject(secret_key);
+    TEE_CloseObject(derivedKey);
     return TEEC_SUCCESS;
   } else {
     OT_LOG(LOG_ERR, "Bad command.");
